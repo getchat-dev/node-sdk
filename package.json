@@ -1,0 +1,28 @@
+{
+  "name": "@emby-chat/node-sdk",
+  "version": "1.0.0",
+  "description": "Official Node SDK for Emby Chat",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/markuper/emby-node-sdk.git"
+  },
+  "keywords": [
+    "emby",
+    "sdk",
+    "chat",
+    "messaging",
+    "conversation",
+    "chatbots",
+    "realtime"
+  ],
+  "author": "Evgeniy Tyurin",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/markuper/emby-node-sdk/issues"
+  },
+  "homepage": "https://github.com/markuper/emby-node-sdk#readme"
+}
