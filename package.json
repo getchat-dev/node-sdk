@@ -4,7 +4,8 @@
   "description": "Official Node SDK for Emby Chat",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "demo": "node -r dotenv/config demo/index.js"
   },
   "repository": {
     "type": "git",
@@ -24,5 +25,10 @@
   "bugs": {
     "url": "https://github.com/markuper/emby-node-sdk/issues"
   },
-  "homepage": "https://github.com/markuper/emby-node-sdk#readme"
+  "homepage": "https://github.com/markuper/emby-node-sdk#readme",
+  "devDependencies": {
+    "dotenv": "^10.0.0",
+    "ejs": "^3.1.6",
+    "express": "^4.17.1"
+  }
 }

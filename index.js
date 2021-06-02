@@ -50,7 +50,7 @@ class Emby {
      * @param Array extra
      * @return string
      */
-     urlByChatId(chatId, user = [], recipients = [], extra = {})
+     urlByChatId(chatId, user = {}, recipients = [], extra = {})
      {
         const rnd = strRandom(32);
 
@@ -74,12 +74,19 @@ class Emby {
             }
 
             if(user.name) {
-                signatureParams.push(queryParams['user']['name'] = user.id);
+                signatureParams.push(queryParams['user']['name'] = user.name);
             }
 
             if(user.avatar)
             {
                 signatureParams.push(queryParams['user']['picture'] = user.avatar);
+            }
+
+            if(user.session) {
+                queryParams['user']['session'] = user.session;
+            }
+            else {
+                queryParams['user']['session'] = strRandom(40);
             }
         }
  

@@ -31,7 +31,11 @@ parameters
 
 generate chat url for unauth user
 
-    emby.urlByChatId('user10');
+    emby.urlByChatId('user10', {session: 'YOUR_SESSION_ID'});
+
+generate chat url for unauth user with custom name
+
+    emby.urlByChatId('user10', {name: 'Custom Name for Guest User', session: 'YOUR_SESSION_ID'});
 
 generate chat url for auth user
 
