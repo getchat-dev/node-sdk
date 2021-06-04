@@ -10,7 +10,7 @@ const emby = new Emby({
   });
 
 const app = express();
-console.info(__dirname);
+
 app.set('view engine', 'ejs')
 app.set('views', path.join(__dirname, '/views'));
 
@@ -21,7 +21,12 @@ app.use('/chat-with-guest', function (request, response) {
         chatUrl: emby.urlByChatId(
             'hsabasdjdlsw',
             {
-                name: 'Steven King'
+                name: 'Steven King',
+                rights: {
+                    kick_users: 'on',
+                    delete_messages: 'any',
+                    send_messages: true
+                }
             },
             [],
             {

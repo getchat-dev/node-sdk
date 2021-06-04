@@ -1,4 +1,6 @@
 const crypto = require('crypto');
+const querystring = require('querystring');
+const processUserRights = require('./libs/processUserRights');
 
 const strRandom = function(len = 10) {
 
@@ -14,24 +16,25 @@ const strRandom = function(len = 10) {
     return text;
 }
 
-const urlQueryBuild = (scope = '', params) => {
-    const scopePrefix = (key, value) => {
-        return scope ? `${scope}[${key}]=${value}` : `${key ? `${key}=` : ''}${value}`;
-    };
+const flatten = function(obj, prefix = '', posfix = '')
+{
+    const data = {};
 
-    const query =
-        Object.keys(params)
-            .map(key => {
-                if(params[key] && typeof(params[key]) === 'object') {
-                    return scopePrefix('', urlQueryBuild(key, params[key]));
-                }
-                else {
-                    return scopePrefix(key, params[key]);
-                }
-            })
-            .join('&');
+    Object.keys(obj).forEach(item => {
+        if(typeof(obj[item]) === 'object') {
+            const values = flatten(obj[item], '[', ']');
+            if(Object.keys(values).length) {
+                Object.keys(values).forEach(_item => {
+                    data[`${prefix}${item}${posfix}${_item}`] = values[_item];
+                })
+            }
+        }
+        else {
+            data[`${prefix}${item}${posfix}`] = obj[item];
+        }
+    })
 
-    return query;
+    return data;
 }
 
 class Emby {
@@ -88,6 +91,13 @@ class Emby {
             else {
                 queryParams['user']['session'] = strRandom(40);
             }
+
+            if(Object.keys(user.rights).length) {
+                const userRights = processUserRights(user.rights);
+                if(userRights && Object.keys(userRights).length) {
+                    queryParams['user']['rights'] = userRights;
+                }
+            }
         }
  
         recipients.forEach(recipient => {
@@ -114,7 +124,7 @@ class Emby {
             queryParams[key] = extra[key];
         });
 
-        const query = urlQueryBuild('', queryParams);
+        const query = querystring.stringify(flatten(queryParams));
 
         return `${this.baseUrl}?${query}`;
     }

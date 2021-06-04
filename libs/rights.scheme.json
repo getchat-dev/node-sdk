@@ -1,0 +1,45 @@
+{
+    "send_messages": {
+      "type": "boolean"
+    },
+    "edit_messages": {
+      "type": "enum",
+      "values": [
+        "none",
+        "my",
+        "any"
+      ]
+    },
+    "delete_messages": {
+      "type": "enum",
+      "values": [
+        "none",
+        "my",
+        "any"
+      ]
+    },
+    "send_photos": {
+      "type": "boolean"
+    },
+    "send_voices": {
+      "type": "boolean"
+    },
+    "send_audio": {
+      "type": "boolean"
+    },
+    "send_documents": {
+      "type": "boolean"
+    },
+    "send_location": {
+      "type": "boolean"
+    },
+    "create_pool": {
+      "type": "boolean"
+    },
+    "participate_pool": {
+      "type": "boolean"
+    },
+    "kick_users": {
+      "type": "boolean"
+    }
+}
