@@ -85,11 +85,13 @@ class Emby {
                 signatureParams.push(queryParams['user']['picture'] = user.avatar);
             }
 
-            if(user.session) {
-                queryParams['user']['session'] = user.session;
-            }
-            else {
-                queryParams['user']['session'] = strRandom(40);
+            if(!user.id) {
+                if(user.session) {
+                    queryParams['user']['session'] = user.session;
+                }
+                else {
+                    queryParams['user']['session'] = strRandom(40);
+                }
             }
 
             if(Object.keys(user.rights).length) {
