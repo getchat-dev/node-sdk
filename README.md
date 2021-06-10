@@ -19,6 +19,19 @@ or
         base_url: 'https://emby-chat.io/'
     });
 
+## all user rights
+
+1. send_messages (boolean)
+2. edit_messages (enum: none|my|any)
+3. delete_messages (enum: none|my|any)
+4. send_photos (boolean)
+5. send_audio (boolean)
+6. send_documents (boolean)
+7. send_location (boolean)
+8. create_pools (boolean)
+9. vote_pool (boolean)
+10. kick_users (boolean)
+
 ## Methods
 
 ### urlByChatId
@@ -51,5 +64,15 @@ generate chat url for auth user with options
         'skin': 'default',
         'skin_options': {
             'hideDeletedMessage' => true
+        }
+    });
+
+generate chat url with Portuguese language
+
+    emby.urlByChatId('user10', {id: '10', name: 'User Name'}, [], {
+        'skin': 'default',
+        'skin_options': {
+            'hideDeletedMessage' => true,
+            'lang' => 'pt'
         }
     });

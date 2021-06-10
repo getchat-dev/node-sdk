@@ -16,26 +16,53 @@ app.set('views', path.join(__dirname, '/views'));
 
 app.use('/chat-with-guest', function (request, response) {
 
+    chatUrl1 = emby.urlByChatId(
+        'https://markuper.com',
+        {
+            id: 10000,
+            name: 'Steven King',
+            session: 'ololo',
+            rights: {
+                kick_users: 'on',
+                delete_messages: 'any',
+                send_messages: true
+            }
+        },
+        [],
+        {
+            'skin': 'default',
+            'skin_options': {
+                'displayHeader': false,
+                'lang': 'pt'
+            }
+        }
+    );
+
+    chatUrl2 = emby.urlByChatId(
+        'https://markuper.com',
+        {
+            id: 10001,
+            name: 'Howard Lovecraft',
+            rights: {
+                kick_users: 'on',
+                delete_messages: 'my',
+                send_messages: true
+            }
+        },
+        [],
+        {
+            'skin': 'ebac_webinar',
+            'skin_options': {
+                'displayHeader': false,
+                'lang': 'ru'
+            }
+        }
+    );
+
     response.render('chat-with-guest', {
         title: 'Emby Chat with guest user',
-        chatUrl: emby.urlByChatId(
-            'hsabasdjdlsw',
-            {
-                name: 'Steven King',
-                rights: {
-                    kick_users: 'on',
-                    delete_messages: 'any',
-                    send_messages: true
-                }
-            },
-            [],
-            {
-                'skin': 'ebac_webinar',
-                'skin_options': {
-                    'displayHeader': false
-                }
-            }
-        )
+        chatUrl1: chatUrl1,
+        chatUrl2: chatUrl2
     });
 });
 
