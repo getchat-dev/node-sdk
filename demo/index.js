@@ -32,7 +32,7 @@ app.use('/chat-with-guest', function (request, response) {
         {
             'skin': 'default',
             'skin_options': {
-                'displayHeader': false,
+                // 'displayHeader': false,
                 'lang': 'pt'
             }
         }
@@ -54,7 +54,31 @@ app.use('/chat-with-guest', function (request, response) {
             'skin': 'ebac_webinar',
             'skin_options': {
                 'displayHeader': false,
+                'hide_day_delimiter': true,
+                'message_max_length': 150,
                 'lang': 'ru'
+            }
+        }
+    );
+
+    chatUrl3 = emby.urlByChatId(
+        'https://markuper.com',
+        {
+            id: 10002,
+            name: 'Nightmare Mike',
+            rights: {
+                kick_users: 'on',
+                delete_messages: 'my',
+                send_messages: true
+            }
+        },
+        [],
+        {
+            'skin': 'ebac_webinar',
+            'skin_options': {
+                'display_header': false,
+                'hide_deleted_message': true,
+                'lang': 'pt'
             }
         }
     );
@@ -62,7 +86,8 @@ app.use('/chat-with-guest', function (request, response) {
     response.render('chat-with-guest', {
         title: 'Emby Chat with guest user',
         chatUrl1: chatUrl1,
-        chatUrl2: chatUrl2
+        chatUrl2: chatUrl2,
+        chatUrl3: chatUrl3
     });
 });
 
