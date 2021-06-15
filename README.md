@@ -19,18 +19,28 @@ or
         base_url: 'https://emby-chat.io/'
     });
 
-## all user rights
+## available user rights
 
-1. send_messages (boolean)
-2. edit_messages (enum: none|my|any)
-3. delete_messages (enum: none|my|any)
-4. send_photos (boolean)
-5. send_audio (boolean)
-6. send_documents (boolean)
-7. send_location (boolean)
-8. create_pools (boolean)
-9. vote_pool (boolean)
-10. kick_users (boolean)
+1. send_messages=true (boolean)
+2. edit_messages=my (enum: none|my|any)
+3. delete_messages=my (enum: none|my|any)
+4. pin_messages=for_me (enum: none|for_me|for_everyone)
+5. send_photos=false (boolean)
+6. send_audio=false (boolean)
+7. send_documents=false (boolean)
+8. send_location=false (boolean)
+9. create_pools=false (boolean)
+10. vote_pool=false (boolean)
+11. kick_users=false (boolean)
+
+## available skin_options
+
+- display_header=true (boolean) // show or hide header
+- display_network_pane=true (boolean) // show or hide network pane now it works only for default skin
+- hide_day_delimiter=false (boolean) // hide date delimiter
+- hide_deleted_message=false (boolean) // if true deleted message won't be displayed
+- message_max_length=0 (integer) // set limit letters for input message if set to 0 no limits
+- lang (enum: en,pt,ru) // set language for skin
 
 ## Methods
 
