@@ -33,6 +33,11 @@ or
 10. vote_pool=false (boolean)
 11. kick_users=false (boolean)
 
+So you can specify options for some rights.
+For instance edit_messages right can have an additional option "extra" (edit_messages:extra).
+It's means that user can edit not only a text, but also an extra options
+
+
 ## available skin_options
 
 - display_header=true (boolean) // show or hide header
@@ -86,3 +91,20 @@ generate chat url with Portuguese language
             'lang' => 'pt'
         }
     });
+
+generate chat url for auth user with right to edit myself messages
+
+    emby.urlByChatId('chatId10',
+        {
+            id: '10',
+            name: 'User Name',
+            rights: {
+                edit_messages: 'my:extra'
+            }
+        }, [], {
+            'skin': 'default',
+            'skin_options': {
+                'hideDeletedMessage' => true
+            }
+        }
+    );

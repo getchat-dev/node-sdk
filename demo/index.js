@@ -25,6 +25,7 @@ app.use('/chat-with-guest', function (request, response) {
             rights: {
                 kick_users: 'on',
                 delete_messages: 'any',
+                edit_messages: 'any:extra',
                 send_messages: true
             }
         },
