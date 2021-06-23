@@ -1,6 +1,9 @@
 const crypto = require('crypto');
+const http = require('http');
+const url = require('url');
 const querystring = require('querystring');
 const processUserRights = require('./libs/processUserRights');
+const _ = require('./libs/helpers');
 
 const strRandom = function(len = 10) {
 
@@ -44,6 +47,35 @@ class Emby {
         this.clientSecret = config.secret;
         this.apiToken = config.api_token;
         this.baseUrl = config.base_url;
+    }
+
+    requestApi(method, params = {}, type = 'get', version = 'v1')
+    {
+        params['api_token'] = this.apiToken;
+
+        const query = querystring.stringify(flatten(params));
+
+        // console.info(`${this.baseUrl}/api/${version}/${method}?${query}`.replace(/(\/{2,})/g, '/'));
+
+        return new Promise((resolve, reject) => {
+            http.get(`${this.baseUrl}/api/${version}/${method}?${query}`, (res) => {
+                let rawData = '';
+                res.setEncoding('utf8');
+    
+                res.on('data', (chunk) => { rawData += chunk; });
+                res.on('end', () => {
+                    try {
+                        const parsedData = JSON.parse(rawData);
+                        resolve(parsedData);
+                    } catch (e) {
+                        reject(e);
+                    }
+                });
+            })
+            .on('error', (e) => {
+                reject(e);
+            });
+        })
     }
 
     /**
@@ -129,6 +161,54 @@ class Emby {
         const query = querystring.stringify(flatten(queryParams));
 
         return `${this.baseUrl}?${query}`;
+    }
+
+    getMessagesFromChat(chatId, queryParams, page = 1, limit = 1)
+    {
+        limit = Math.min(parseInt(limit, 10), 1000);
+        page = Math.max(parseInt(page, 10), 1);
+
+        let params = {
+            'page': page,
+            'limit': limit
+        };
+
+        if(_.isFilledPlainObject(queryParams)) {
+            const _params = {};
+            if(_.isFilledPlainObject(queryParams.extra)) {
+                const extraParams = {};
+
+                Object.keys(queryParams.extra).forEach(key => {
+                    const value = queryParams.extra[key];
+
+                    if(_.isScalar(value)) {
+                        extraParams[key] = _.isBoolean(value, true) ? _.isTRUE(value) : value;
+                    }
+                });
+
+                if(Object.keys(extraParams).length) {
+                    _params.extra = extraParams;
+                }
+
+                if(_.isBoolean(queryParams.isDeleted, true)) {
+                    _params.isDeleted = Number(_.isTRUE(queryParams.isDeleted));
+                }
+
+                if(_.isBoolean(queryParams.isEdited, true)) {
+                    _params.isEdited = Number(_.isTRUE(queryParams.isEdited));
+                }
+
+                if(_.isBoolean(queryParams.withUsers, true)) {
+                    _params.withUsers = Number(_.isTRUE(queryParams.withUsers));
+                }
+
+                if(Object.keys(_params).length) {
+                    params = Object.assign({}, params, _params);
+                }
+            }
+        }
+
+        return this.requestApi(`chat/${chatId}/messages`, params);
     }
 }
 
