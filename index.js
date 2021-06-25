@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const http = require('http');
+const http = require('https');
 const url = require('url');
 const querystring = require('querystring');
 const processUserRights = require('./libs/processUserRights');
