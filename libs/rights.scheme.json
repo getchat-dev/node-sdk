@@ -18,6 +18,14 @@
         "any"
       ]
     },
+    "pin_messages": {
+      "type": "enum",
+      "values": [
+        "none",
+        "for_me",
+        "for_everyone"
+      ]
+    },
     "send_photos": {
       "type": "boolean"
     },

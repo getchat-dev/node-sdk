@@ -55,22 +55,26 @@ class Emby {
 
         const query = querystring.stringify(flatten(params));
 
-        // console.info(`${this.baseUrl}/api/${version}/${method}?${query}`.replace(/(\/{2,})/g, '/'));
-
         return new Promise((resolve, reject) => {
             http.get(`${this.baseUrl}/api/${version}/${method}?${query}`, (res) => {
-                let rawData = '';
-                res.setEncoding('utf8');
-    
-                res.on('data', (chunk) => { rawData += chunk; });
-                res.on('end', () => {
-                    try {
-                        const parsedData = JSON.parse(rawData);
-                        resolve(parsedData);
-                    } catch (e) {
-                        reject(e);
-                    }
-                });
+
+                if(res.statusCode === 200) {
+                    let rawData = '';
+                    res.setEncoding('utf8');
+        
+                    res.on('data', (chunk) => { rawData += chunk; });
+                    res.on('end', () => {
+                        try {
+                            const parsedData = JSON.parse(rawData);
+                            resolve(parsedData);
+                        } catch (e) {
+                            reject(e);
+                        }
+                    });
+                }
+                else {
+                    reject(new Error(res.statusMessage));
+                }
             })
             .on('error', (e) => {
                 reject(e);
@@ -104,6 +108,10 @@ class Emby {
         };
  
         if(user) {
+            if(user.email) {
+                signatureParams.push(queryParams['user']['email'] = user.email);
+            }
+
             if(user.id) {
                 signatureParams.push(queryParams['user']['id'] = user.id);
             }
