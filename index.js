@@ -1,5 +1,6 @@
 const crypto = require('crypto');
-const http = require('https');
+const https = require('https');
+const http = require('http');
 const url = require('url');
 const querystring = require('querystring');
 const processUserRights = require('./libs/processUserRights');
@@ -51,12 +52,31 @@ class Emby {
 
     requestApi(method, params = {}, type = 'get', version = 'v1')
     {
-        params['api_token'] = this.apiToken;
+        let sParams = '';
 
-        const query = querystring.stringify(flatten(params));
+        let _url = `${this.baseUrl}/api/${version}/${method}?api_token=${this.apiToken}`;
+
+        if(!(type === 'post' || type === 'put')) {
+            _url+= querystring.stringify(flatten(params))
+        }
+
+        const urlParts = url.parse(_url);
+
+        const options = {
+            method: type.toUpperCase(),
+            ...(_.onlyProps(urlParts, ['hostname', 'port', 'path'])),
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        }
+
+        if(type === 'post' || type === 'put') {
+            sParams = JSON.stringify(params);
+            // options.headers['Content-Length'] = sParams.length;
+        }
 
         return new Promise((resolve, reject) => {
-            http.get(`${this.baseUrl}/api/${version}/${method}?${query}`, (res) => {
+            const request = (urlParts.protocol === 'https:' ? https : http).request(options, (res) => {
 
                 if(res.statusCode === 200) {
                     let rawData = '';
@@ -73,12 +93,20 @@ class Emby {
                     });
                 }
                 else {
-                    reject(new Error(res.statusMessage));
+                    console.error(new Error(res.statusCode, res.statusMessage));
+                    reject();
                 }
             })
             .on('error', (e) => {
                 reject(e);
             });
+
+            if(sParams.length) {
+                console.info(sParams);
+                request.write(sParams);
+            }
+
+            request.end();
         })
     }
 
@@ -197,26 +225,105 @@ class Emby {
                 if(Object.keys(extraParams).length) {
                     _params.extra = extraParams;
                 }
+            }
 
-                if(_.isBoolean(queryParams.isDeleted, true)) {
-                    _params.isDeleted = Number(_.isTRUE(queryParams.isDeleted));
-                }
+            if(_.isBoolean(queryParams.isDeleted, true)) {
+                _params.isDeleted = Number(_.isTRUE(queryParams.isDeleted));
+            }
 
-                if(_.isBoolean(queryParams.isEdited, true)) {
-                    _params.isEdited = Number(_.isTRUE(queryParams.isEdited));
-                }
+            if(_.isBoolean(queryParams.isEdited, true)) {
+                _params.isEdited = Number(_.isTRUE(queryParams.isEdited));
+            }
 
-                if(_.isBoolean(queryParams.withUsers, true)) {
-                    _params.withUsers = Number(_.isTRUE(queryParams.withUsers));
-                }
+            if(_.isBoolean(queryParams.withUsers, true)) {
+                _params.withUsers = Number(_.isTRUE(queryParams.withUsers));
+            }
 
-                if(Object.keys(_params).length) {
-                    params = Object.assign({}, params, _params);
-                }
+            if(Object.keys(_params).length) {
+                params = Object.assign({}, params, _params);
             }
         }
 
         return this.requestApi(`chat/${chatId}/messages`, params);
+    }
+
+    sendMessage(chatId, user, recipients, message, extra = [], buttons = [])
+    {
+        const queryParams = {
+            'user': user,
+            'chat_id': chatId,
+            'recipients': recipients
+        };
+
+        const messageData = {
+            'text': message
+        };
+
+        if (_.isFilledArray(extra))
+        {
+            messageData.extra = extra;
+        }
+
+        if (_.isFilledArray(buttons))
+        {
+            messageData.buttons = buttons;
+        }
+
+        // recipients.
+        // {
+        //     $recipientData = [
+        //         'id' => $recipient->getId(),
+        //         'name' => $recipient->getName(),
+        //         'is_bot' => $recipient->getIsBot()
+        //     ];
+
+        //     if ($recipient->getAvatar())
+        //     {
+        //         $recipientData['picture'] = $recipient->getAvatar();
+        //     }
+
+        //     $queryParams['recipients'][] = $recipientData;
+        // }
+
+        queryParams.messages = [messageData];
+
+        return this.requestApi('messages', queryParams, 'post');
+    }
+
+    updateMessage(messageId, {text, isDeleted = false, extra = {}, buttons = []}, {replaceExtra = false} = {})
+    {
+        const params = {message: {}};
+
+        if(_.isString(text) && text.length) {
+            params.message.text = text;
+        }
+
+        if(_.isTRUE(isDeleted)) {
+            params.message.is_deleted = "1";
+            delete params.message.text;
+        }
+
+        if(_.isFilledPlainObject(extra)) {
+            params.message.extra = extra;
+        }
+
+        if(_.isFilledArray(buttons)) {
+            params.message.buttons = buttons;
+        }
+
+        params.update_extra_mode = (replaceExtra === true ? 'replace' : 'merge');
+
+        return this.requestApi(`messages/${messageId}`, params, 'put');
+    }
+
+    sendTyping(chatId, userId)
+    {
+        const queryParams = {
+            'user': userId,
+            // 'chat': chatId
+        };
+
+        return this.requestApi(`chat/${chatId}/typing`, queryParams, 'put');
     }
 }
 

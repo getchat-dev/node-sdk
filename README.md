@@ -108,3 +108,41 @@ generate chat url for auth user with right to edit myself messages
             }
         }
     );
+
+###  sendMessage
+send message to chat
+parameters
+1. required (string) chat_id
+2. (object) user
+3. (array[object]) recipients
+4. (string) message
+
+@return Promise
+
+    emby.sendMessage('chat_id', {
+        'id': userId,
+        'name': userName
+    }, [], message).then(response => {
+        console.info('message was successfully sent', response);
+    })
+    .catch(e => {
+        console.error(e.message);
+    });
+
+###  updateMessage
+update message
+parameters
+1. required (string) message_id
+2. (object) params = { string text, boolean isDeleted = false, object extra = {}, array buttons = [] }
+3. (object) options = { boolean replaceExtra = false }
+
+@return Promise
+
+    emby.updateMessage(messageId, {
+        text: "Меняем на такой то текст сообщения",
+        extra: {
+            someParameter: 'someValue'
+        }
+    });
+
+    
