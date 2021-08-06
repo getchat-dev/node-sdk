@@ -41,6 +41,73 @@ const flatten = function(obj, prefix = '', posfix = '')
     return data;
 }
 
+const normilizeData = function(data, filter = [])
+{
+    const result = {};
+
+    if(!_.isPlainObject(data)) {
+        throw new Error(`first parameter have to be a plain object type`);
+    }
+
+    let filterFields = [];
+    let isFilterObject = false;
+
+    if(_.isFilledPlainObject(filter)) {
+        isFilterObject = true;
+        filterFields = Object.keys(filter);
+    }
+    else if(_.isFilledArray(filter)) {
+        filterFields = filter;
+    }
+
+    data = Object.assign({}, data);
+
+    if (filterFields.length)
+    {
+        filterFields.forEach(key => {
+            if (_.isFunction( _.getValue(filter, [key, 'process']) ))
+            {
+                const _data = filter[key].process(data[key]);
+                if(_data !== undefined) {
+                    result[key] = _data
+                }
+            }
+            else if(_.isNoValue(data[key]))
+            {
+                if( _.getValue(filter, [key, 'default'], undefined) !== undefined ) {
+                    result[key] = filter[key]['default'];
+                }
+            }
+            else {
+                result[key] = data[key]
+            }
+        })
+    }
+    else { return data; }
+
+    return result;
+}
+
+const addToSignature = function(signature, data, filterKeys)
+{
+    signature = Array.prototype.slice.call(signature);
+
+    let keys = Object.keys(data);
+
+    if (keys.length)
+    {
+        if(_.isFilledArray(filterKeys)) {
+            keys = keys.filter(key => filterKeys.indexOf(key) > -1);
+        }
+
+        keys.sort().forEach(key => {
+            signature.push(data[key])
+        });
+    }
+
+    return signature;
+}
+
 class Emby {
 
     constructor(config = {}) {
@@ -102,7 +169,6 @@ class Emby {
             });
 
             if(sParams.length) {
-                console.info(sParams);
                 request.write(sParams);
             }
 
@@ -111,17 +177,67 @@ class Emby {
     }
 
     /**
-     * @param chatId
+     * @param Array chat
      * @param Array user
      * @param Array[] recipients
      * @param Array extra
      * @return string
      */
-     urlByChatId(chatId, user = {}, recipients = [], extra = {})
-     {
+    urlByChatId(chat = {}, user = {}, recipients = [], extra = {})
+    {
+        // check chat parameter
+        if(_.isPlainObject(chat)) {
+            chat = normilizeData(chat, ['id', 'title', 'socket_port']);
+        }
+        else if(_.isString(chat)) {
+            chat = {id: chat};
+        }
+        else {
+            throw new Error('first parameter(chat) have to be a plain object or string');
+        }
+
+        if(!_.isString(chat.id)) {
+            throw new Error(`chat id isn't passed`);
+        }
+
+        // check user parameter
+        if(_.isPlainObject(user)) {
+            user = normilizeData(user, {
+                id: null,
+                name: null,
+                email: null,
+                picture: null,
+                rights: {
+                    process: (data) => {
+                        if (_.isFilledPlainObject(data))
+                        {
+                            const userRights = processUserRights(data);
+                            if(userRights && Object.keys(userRights).length) {
+                                return userRights;
+                            }
+                        }
+
+                        return undefined;
+                    }
+                },
+                session: {
+                    process: (data) => {
+                        if (!user.id && !data) {
+                            return strRandom(40);
+                        }
+
+                        return undefined;
+                    }
+                }
+            });
+        }
+        else {
+            throw new Error('second parameter(user) have to be a plain object');
+        }
+
         const rnd = strRandom(32);
 
-        const signatureParams = [
+        let signatureParams = [
             this.clientId,
             this.clientSecret,
             rnd
@@ -129,65 +245,23 @@ class Emby {
 
         const queryParams = {
             'client_id': this.clientId,
-            'chat_id': chatId,
             'rnd': rnd,
-            'user': [],
+            'chat': chat,
+            'user': user,
             'recipients': []
         };
- 
-        if(user) {
-            if(user.email) {
-                signatureParams.push(queryParams['user']['email'] = user.email);
-            }
 
-            if(user.id) {
-                signatureParams.push(queryParams['user']['id'] = user.id);
-            }
-
-            if(user.name) {
-                signatureParams.push(queryParams['user']['name'] = user.name);
-            }
-
-            if(user.avatar)
-            {
-                signatureParams.push(queryParams['user']['picture'] = user.avatar);
-            }
-
-            if(!user.id) {
-                if(user.session) {
-                    queryParams['user']['session'] = user.session;
-                }
-                else {
-                    queryParams['user']['session'] = strRandom(40);
-                }
-            }
-
-            if(Object.keys(user.rights).length) {
-                const userRights = processUserRights(user.rights);
-                if(userRights && Object.keys(userRights).length) {
-                    queryParams['user']['rights'] = userRights;
-                }
-            }
-        }
+        signatureParams = addToSignature(signatureParams, user, ['id', 'name', 'email', 'picture']);
  
         recipients.forEach(recipient => {
-            signatureParams.push(recipient['id']);
-            signatureParams.push(recipient['name']);
+            const normilizedRecipient = normilizeData(recipient, {id: null, name: null, is_bot: {default: false}});
 
-            const recipientData = {
-                'id': recipient['id'],
-                'name': recipient['name'],
-                'is_bot': recipient['is_bot'] || false
-            };
-
-            if(recipient.avatar) {
-                recipientData['picture'] = recipient.avatar;
-            }
-
-            queryParams['recipients'].push(recipientData);
+            queryParams['recipients'].push(normilizedRecipient)
+            signatureParams = addToSignature(signatureParams, normilizedRecipient, ['id', 'name']);
         });
 
-        signatureParams.push(chatId);
+        signatureParams = addToSignature(signatureParams, chat, ['id', 'title', 'socket_port'])
+
         queryParams['signature'] = crypto.createHash('md5').update(signatureParams.join(',')).digest('hex');
 
         Object.keys(extra).forEach(key => {

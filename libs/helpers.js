@@ -2,10 +2,10 @@ const isExists = function(object, path) {
 
     let parts = [];
 
-    if(this.isString(path)) {
+    if(isString(path)) {
         parts = path.split('.');
     }
-    else if(this.isFilledArray(path)) {
+    else if(isFilledArray(path)) {
         parts = path;
     }
 
@@ -13,7 +13,7 @@ const isExists = function(object, path) {
 
     for(let i = 0, end = parts.length; i < end; i++) {
 
-        if(this.isScalar(testObject) || typeof(testObject[parts[i]]) === 'undefined') {
+        if(isScalar(testObject) || typeof(testObject[parts[i]]) === 'undefined') {
             return false;
         }
 
@@ -23,22 +23,21 @@ const isExists = function(object, path) {
     return true;
 };
 
-const getValue = function(object, path, defValue = null) {
+const getValue = function(object, path, defValue) {
 
     let parts = [];
 
-    if(this.isString(path)) {
+    if(isString(path)) {
         parts = path.split('.');
     }
-    else if(this.isFilledArray(path)) {
+    else if(isFilledArray(path)) {
         parts = path;
     }
 
     let testObject = object;
 
     for(let i = 0, end = parts.length; i < end; i++) {
-
-        if(this.isScalar(testObject) || typeof(testObject[parts[i]]) === 'undefined') {
+        if(isScalar(testObject) || isNoValue(testObject) || typeof(testObject[parts[i]]) === 'undefined') {
             return defValue;
         }
 
@@ -46,6 +45,10 @@ const getValue = function(object, path, defValue = null) {
     }
 
     return testObject;
+}
+
+const isNoValue = function(value) {
+    return value === undefined || value === null;
 }
 
 const isString = function(value) {
@@ -106,6 +109,7 @@ module.exports = {
     isScalar,
     isString,
     isBoolean,
+    isNoValue,
     isFunction,
     isArray,
     isFilledArray,
