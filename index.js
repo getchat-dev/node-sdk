@@ -222,8 +222,8 @@ class Emby {
                 },
                 session: {
                     process: (data) => {
-                        if (!user.id && !data) {
-                            return strRandom(40);
+                        if (!user.id) {
+                            return _.isString(data) ? data : strRandom(40)
                         }
 
                         return undefined;
