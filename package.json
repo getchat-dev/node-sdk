@@ -1,6 +1,6 @@
 {
   "name": "@emby-chat/node-sdk",
-  "version": "1.6.1",
+  "version": "1.6.2",
   "description": "Official Node SDK for Emby Chat",
   "main": "index.js",
   "scripts": {

@@ -115,16 +115,21 @@ class Emby {
         this.clientSecret = config.secret;
         this.apiToken = config.api_token;
         this.baseUrl = config.base_url;
+
+        if(_.isString(this.baseUrl)) {
+            this.baseUrl = this.baseUrl.replace(/\/$/g, '');
+        }
     }
 
     requestApi(method, params = {}, type = 'get', version = 'v1')
     {
         let sParams = '';
 
-        let _url = `${this.baseUrl}/api/${version}/${method}?api_token=${this.apiToken}`;
+        //let _url = `${this.baseUrl}/api/${version}/${method}?api_token=${this.apiToken}&`;
+        let _url = `${this.baseUrl}/api/${version}/${method}`;
 
         if(!(type === 'post' || type === 'put')) {
-            _url+= querystring.stringify(flatten(params))
+            _url+= '?'+querystring.stringify(flatten(params))
         }
 
         const urlParts = url.parse(_url);
@@ -133,7 +138,9 @@ class Emby {
             method: type.toUpperCase(),
             ...(_.onlyProps(urlParts, ['hostname', 'port', 'path'])),
             headers: {
+                'Accept': 'application/json',
                 'Content-Type': 'application/json',
+                'Authorization': `Bearer ${this.apiToken}`
             }
         }
 
