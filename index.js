@@ -41,6 +41,11 @@ const flatten = function(obj, prefix = '', posfix = '')
     return data;
 }
 
+const _trim = function(value)
+{
+    return _.isString(value) ? value.trim() : value;
+}
+
 const normilizeData = function(data, filter = [])
 {
     const result = {};
@@ -69,17 +74,17 @@ const normilizeData = function(data, filter = [])
             {
                 const _data = filter[key].process(data[key]);
                 if(_data !== undefined) {
-                    result[key] = _data
+                    result[key] = _trim(_data);
                 }
             }
             else if(_.isNoValue(data[key]))
             {
                 if( _.getValue(filter, [key, 'default'], undefined) !== undefined ) {
-                    result[key] = filter[key]['default'];
+                    result[key] = _trim(filter[key]['default']);
                 }
             }
             else {
-                result[key] = data[key]
+                result[key] = _trim(data[key]);
             }
         })
     }
