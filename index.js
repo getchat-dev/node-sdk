@@ -373,10 +373,10 @@ class Emby {
 
         queryParams.messages = [messageData];
 
-        return this.requestApi('messages', queryParams, 'post');
+        return this.requestApi(`chat/${chatId}/messages`, queryParams, 'post');
     }
 
-    updateMessage(messageId, {text, isDeleted = false, extra = {}, buttons = []}, {replaceExtra = false} = {})
+    updateMessage(chatId, messageId, {text, isDeleted = false, extra = {}, buttons = []}, {replaceExtra = false, returnMessage = false} = {})
     {
         const params = {message: {}};
 
@@ -399,7 +399,11 @@ class Emby {
 
         params.update_extra_mode = (replaceExtra === true ? 'replace' : 'merge');
 
-        return this.requestApi(`messages/${messageId}`, params, 'put');
+        if(returnMessage === true) {
+            params.return_message = '1'
+        }
+
+        return this.requestApi(`chat/${chatId}/messages/${messageId}`, params, 'put');
     }
 
     sendTyping(chatId, userId)
