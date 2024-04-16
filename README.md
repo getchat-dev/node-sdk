@@ -16,7 +16,7 @@ or
         id: 'your id',
         secret: 'your secret key',
         api_token: 'your api token',
-        base_url: 'https://emby-chat.io/'
+        base_url: 'https://app.getchat.dev/'
     });
 
 ## available user rights
