@@ -126,6 +126,15 @@ class Emby {
         }
     }
 
+    /**
+     * Make a request to the API.
+     *
+     * @param {string} method - The API method to be called. This parameter is required.
+     * @param {Object} [params={}] - The parameters to be passed to the API method.
+     * @param {string} [type='get'] - The HTTP request type (e.g., 'get', 'post'). Defaults to 'get'.
+     * @param {string} [version='v1'] - The API version to use. Defaults to 'v1'.
+     * @returns {Promise<Object>} A promise that resolves to the API response.
+     */
     requestApi(method, params = {}, type = 'get', version = 'v1')
     {
         let sParams = '';
@@ -189,11 +198,171 @@ class Emby {
     }
 
     /**
-     * @param Array chat
-     * @param Array user
-     * @param Array[] recipients
-     * @param Array extra
-     * @return string
+     * Generate a chat URL.
+     *
+     * @param {Object} options - The options object containing all parameters.
+     * @param {Object} [options.chat] - The chat object containing chat details. This parameter is required.
+     * @param {string} [options.chat.id] - The unique identifier for the chat. This parameter is required.
+     * @param {string} [options.chat.title] - The title of the chat.
+     * @param {Object} options.user - The user object containing user details. This parameter is required.
+     * @param {string} options.user.id - The unique identifier for the user.
+     * @param {string} [options.user.name] - The name of the user.
+     * @param {string} [options.user.email] - The email of the user.
+     * @param {string} [options.user.picture] - The picture URL of the user.
+     * @param {string} [options.user.link] - The link associated with the user.
+     * @param {Object} [options.user.rights] - The rights object containing user permissions.
+     * @param {boolean} [options.user.rights.send_messages=true] - Enable or disable sending messages.
+     * @param {("none"|"my"|"any")} [options.user.rights.edit_messages="my"] - Permission to edit messages.
+     * @param {("none"|"my"|"any")} [options.user.rights.delete_messages="my"] - Permission to delete messages.
+     * @param {("none"|"for_me"|"for_everyone")} [options.user.rights.pin_messages="for_me"] - Permission to pin messages.
+     * @param {boolean} [options.user.rights.send_photos=false] - Enable or disable sending photos.
+     * @param {boolean} [options.user.rights.send_audio=false] - Enable or disable sending audio.
+     * @param {boolean} [options.user.rights.send_documents=false] - Enable or disable sending documents.
+     * @param {boolean} [options.user.rights.send_location=false] - Enable or disable sending location.
+     * @param {boolean} [options.user.rights.create_pools=false] - Enable or disable creating pools.
+     * @param {boolean} [options.user.rights.vote_pool=false] - Enable or disable voting in pools.
+     * @param {boolean} [options.user.rights.kick_users=false] - Enable or disable kicking users.
+     * @param {Object[]} [options.recipients=[]] - An array of recipient objects.
+     * @param {string} options.recipients[].id - The unique identifier for the recipient.
+     * @param {string} options.recipients[].name - The name of the recipient.
+     * @param {boolean} [options.recipients[].is_bot=false] - Indicates if the recipient is a bot.
+     * @param {Object} [options.extra={}] - Additional options.
+     * @param {Object} [options.extra.skin_options] - Skin options for the chat interface.
+     * @param {boolean} [options.extra.skin_options.display_header=true] - Show or hide header.
+     * @param {boolean} [options.extra.skin_options.display_network_pane=true] - Show or hide network pane (only works for default skin).
+     * @param {boolean} [options.extra.skin_options.hide_day_delimiter=false] - Hide date delimiter.
+     * @param {boolean} [options.extra.skin_options.hide_deleted_message=false] - If true, deleted messages won't be displayed.
+     * @param {number} [options.extra.skin_options.message_max_length=0] - Set limit for input message length (0 means no limit).
+     * @param {("en"|"pt"|"ru")} [options.extra.skin_options.lang="en"] - Set language for skin.
+     * 
+     * @returns {string} The generated chat URL.
+     */
+    url({chat = null, user = {}, recipients = [], extra = {} })
+    {
+        // check chat parameter
+        if(_.isPlainObject(chat)) {
+            chat = normilizeData(chat, ['id', 'title', 'socket_port']);
+        }
+        else if(_.isString(chat)) {
+            chat = {id: chat};
+        }
+        else {
+            chat = null;
+        }
+
+        // check user parameter
+        if(_.isPlainObject(user)) {
+            user = normilizeData(user, {
+                id: null,
+                name: null,
+                email: null,
+                picture: null,
+                rights: {
+                    process: (data) => {
+                        if (_.isFilledPlainObject(data))
+                        {
+                            const userRights = processUserRights(data);
+                            if(userRights && Object.keys(userRights).length) {
+                                return userRights;
+                            }
+                        }
+
+                        return undefined;
+                    }
+                },
+                session: {
+                    process: (data) => {
+                        if (!user.id) {
+                            return _.isString(data) ? data : strRandom(40)
+                        }
+
+                        return undefined;
+                    }
+                }
+            });
+        }
+        else {
+            throw new Error('user parameter have to be a plain object');
+        }
+
+        const rnd = strRandom(32);
+
+        let signatureParams = [
+            this.clientId,
+            this.clientSecret,
+            rnd
+        ];
+
+        const queryParams = {
+            'client_id': this.clientId,
+            'rnd': rnd,
+            'user': user,
+            'recipients': []
+        };
+
+        signatureParams = addToSignature(signatureParams, user, ['id', 'name', 'email', 'link', 'picture']);
+ 
+        recipients.forEach(recipient => {
+            const normilizedRecipient = normilizeData(recipient, {id: null, name: null, is_bot: {default: false}});
+
+            queryParams['recipients'].push(normilizedRecipient)
+            signatureParams = addToSignature(signatureParams, normilizedRecipient, ['id', 'name']);
+        });
+
+        if (chat) {
+            signatureParams = addToSignature(signatureParams, chat, ['id', 'title', 'socket_port'])
+            queryParams['chat'] = chat;
+        }
+
+        queryParams['signature'] = crypto.createHash('md5').update(signatureParams.join(',')).digest('hex');
+
+        Object.keys(extra).forEach(key => {
+            queryParams[key] = extra[key];
+        });
+
+        const query = querystring.stringify(flatten(queryParams));
+
+        return `${this.baseUrl}?${query}`;
+    }
+
+    /**
+     * Generate a chat URL by chat ID.
+     *
+     * @param {Object} chat - The chat object containing chat details. This parameter is required.
+     * @param {string} chat.id - The unique identifier for the chat. This parameter is required.
+     * @param {string} chat.title - The title of the chat.
+     * @param {Object} user - The user object containing user details. This parameter is required.
+     * @param {string} user.id - The unique identifier for the user.
+     * @param {string} user.name - The name of the user.
+     * @param {string} [user.email] - The email of the user.
+     * @param {string} [user.picture] - The picture URL of the user.
+     * @param {string} [user.link] - The link associated with the user.
+     * @param {Object} [user.rights] - The rights object containing user permissions.
+     * @param {boolean} [user.rights.send_messages=true] - Enable or disable sending messages.
+     * @param {("none"|"my"|"any")} [user.rights.edit_messages="my"] - Permission to edit messages.
+     * @param {("none"|"my"|"any")} [user.rights.delete_messages="my"] - Permission to delete messages.
+     * @param {("none"|"for_me"|"for_everyone")} [user.rights.pin_messages="for_me"] - Permission to pin messages.
+     * @param {boolean} [user.rights.send_photos=false] - Enable or disable sending photos.
+     * @param {boolean} [user.rights.send_audio=false] - Enable or disable sending audio.
+     * @param {boolean} [user.rights.send_documents=false] - Enable or disable sending documents.
+     * @param {boolean} [user.rights.send_location=false] - Enable or disable sending location.
+     * @param {boolean} [user.rights.create_pools=false] - Enable or disable creating pools.
+     * @param {boolean} [user.rights.vote_pool=false] - Enable or disable voting in pools.
+     * @param {boolean} [user.rights.kick_users=false] - Enable or disable kicking users.
+     * @param {Object[]} [recipients=[]] - An array of recipient objects.
+     * @param {string} recipients[].id - The unique identifier for the recipient.
+     * @param {string} recipients[].name - The name of the recipient.
+     * @param {boolean} [recipients[].is_bot=false] - Indicates if the recipient is a bot.
+     * @param {Object} [extra={}] - Additional options.
+     * @param {Object} [extra.skin_options] - Skin options for the chat interface.
+     * @param {boolean} [extra.skin_options.display_header=true] - Show or hide header.
+     * @param {boolean} [extra.skin_options.display_network_pane=true] - Show or hide network pane (only works for default skin).
+     * @param {boolean} [extra.skin_options.hide_day_delimiter=false] - Hide date delimiter.
+     * @param {boolean} [extra.skin_options.hide_deleted_message=false] - If true, deleted messages won't be displayed.
+     * @param {number} [extra.skin_options.message_max_length=0] - Set limit for input message length (0 means no limit).
+     * @param {("en"|"pt"|"ru")} [extra.skin_options.lang="en"] - Set language for skin.
+     * 
+     * @returns {string} The generated chat URL.
      */
     urlByChatId(chat = {}, user = {}, recipients = [], extra = {})
     {
@@ -263,7 +432,7 @@ class Emby {
             'recipients': []
         };
 
-        signatureParams = addToSignature(signatureParams, user, ['id', 'name', 'email', 'picture']);
+        signatureParams = addToSignature(signatureParams, user, ['id', 'name', 'email', 'link', 'picture']);
  
         recipients.forEach(recipient => {
             const normilizedRecipient = normilizeData(recipient, {id: null, name: null, is_bot: {default: false}});
@@ -285,6 +454,16 @@ class Emby {
         return `${this.baseUrl}?${query}`;
     }
 
+    /**
+     * Retrieve messages from a chat by chat ID.
+     *
+     * @param {string} chatId - The unique identifier for the chat. This parameter is required.
+     * @param {Object} queryParams - The query parameters to filter messages. This parameter is required.
+     * @param {number} [page=1] - The page number for pagination. Defaults to 1.
+     * @param {number} [limit=1] - The number of messages to retrieve per page. Defaults to 1.
+     * 
+     * @returns {Object[]} An array of messages from the chat.
+     */
     getMessagesFromChat(chatId, queryParams, page = 1, limit = 1)
     {
         limit = Math.min(parseInt(limit, 10), 1000);
@@ -333,6 +512,29 @@ class Emby {
         return this.requestApi(`chat/${chatId}/messages`, params);
     }
 
+    /**
+     * Send a message to a chat.
+     *
+     * @param {string} chatId - The unique identifier for the chat. This parameter is required.
+     * @param {Object} user - The user object sending the message. This parameter is required.
+     * @param {string} user.id - The unique identifier for the user.
+     * @param {string} [user.name] - The name of the user.
+     * @param {string} [user.email] - The email of the user.
+     * @param {string} [user.picture] - The picture URL of the user.
+     * @param {string} [user.link] - The link associated with the user.
+     * @param {Object[]} [recipients] - An array of recipient objects. This parameter is required.
+     * @param {string} recipients[].id - The unique identifier for the recipient.
+     * @param {string} recipients[].name - The name of the recipient.
+     * @param {string} message - The message content to be sent. This parameter is required.
+     * @param {Object[]} [extra=[]] - Additional options for the message.
+     * @param {Object[]} [buttons=[]] - An array of button objects to be included with the message.
+     * @param {string} buttons[].label - The label of the button. This parameter is required.
+     * @param {string} buttons[].action - The action associated with the button. This parameter is required.
+     * @param {string} buttons[].type - The type of the button (local or remote). This parameter is required.
+     * @param {string} [buttons[].style] - The style of the button.
+     * 
+     * @returns {Promise<Object>} A promise that resolves to the response of the send message action.
+     */
     sendMessage(chatId, user, recipients, message, extra = [], buttons = [])
     {
         const queryParams = {
@@ -376,6 +578,26 @@ class Emby {
         return this.requestApi(`chat/${chatId}/messages`, queryParams, 'post');
     }
 
+    /**
+     * Update a message in a chat.
+     *
+     * @param {string} chatId - The unique identifier for the chat. This parameter is required.
+     * @param {string} messageId - The unique identifier for the message. This parameter is required.
+     * @param {Object} updateData - The data to update the message with. This parameter is required.
+     * @param {string} updateData.text - The new text content of the message.
+     * @param {boolean} [updateData.isDeleted=false] - Flag indicating if the message is deleted.
+     * @param {Object} [updateData.extra={}] - Additional options for the message.
+     * @param {Object[]} [updateData.buttons=[]] - An array of button objects to be included with the message.
+     * @param {string} updateData.buttons[].label - The label of the button. This parameter is required.
+     * @param {string} updateData.buttons[].action - The action associated with the button. This parameter is required.
+     * @param {string} [updateData.buttons[].type] - The type of the button (local or remote).
+     * @param {string} [updateData.buttons[].style] - The style of the button.
+     * @param {Object} [options={}] - Additional options for the update operation.
+     * @param {boolean} [options.replaceExtra=false] - Flag to replace the existing extra options with the new ones.
+     * @param {boolean} [options.returnMessage=false] - Flag to return the updated message.
+     * 
+     * @returns {Promise<Object>} A promise that resolves to the response of the update message action.
+     */
     updateMessage(chatId, messageId, {text, isDeleted = false, extra = {}, buttons = []}, {replaceExtra = false, returnMessage = false} = {})
     {
         const params = {message: {}};
@@ -406,11 +628,18 @@ class Emby {
         return this.requestApi(`chat/${chatId}/messages/${messageId}`, params, 'put');
     }
 
+    /**
+     * Send a typing indicator to a chat.
+     *
+     * @param {string} chatId - The unique identifier for the chat. This parameter is required.
+     * @param {string} userId - The unique identifier for the user. This parameter is required.
+     * 
+     * @returns {Promise<void>} A promise that resolves when the typing indicator has been sent.
+     */
     sendTyping(chatId, userId)
     {
         const queryParams = {
             'user': userId,
-            // 'chat': chatId
         };
 
         return this.requestApi(`chat/${chatId}/typing`, queryParams, 'put');
