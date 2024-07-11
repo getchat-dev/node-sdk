@@ -345,9 +345,13 @@ emby.urlByChatId('chatId10',
  * @param {string} [user.email] - The email of the user.
  * @param {string} [user.picture] - The picture URL of the user.
  * @param {string} [user.link] - The link associated with the user.
- * @param {Object[]} [recipients] - An array of recipient objects. This parameter is required.
+ * @param {Object[]} [recipients] - An array of recipient objects..
  * @param {string} recipients[].id - The unique identifier for the recipient.
  * @param {string} recipients[].name - The name of the recipient.
+ * @param {string} [recipients[].email] - The name of the recipient.
+ * @param {string} [recipients[].picture] - The name of the recipient.
+ * @param {string} [recipients[].link] - The name of the recipient.
+ * @param {boolean} [recipients[].is_bot=false] - Indicates if the recipient is a bot.
  * @param {string} message - The message content to be sent. This parameter is required.
  * @param {Object[]} [extra=[]] - Additional options for the message.
  * @param {Object[]} [buttons=[]] - An array of button objects to be included with the message.
@@ -406,4 +410,71 @@ emby.updateMessage(messageId, {
 ##### to delete message
 ```javascript
 emby.updateMessage(messageId, {isDeleted: true});
+```
+
+#### deleteMessage
+```javascript
+/**
+ * Send a message to a chat.
+ *
+ * @param {string} chatId - The unique identifier for the chat. This parameter is required.
+ * @param {string} messageId - The unique identifier for the message. This parameter is required.
+ * 
+ * @returns {Promise<Object>} A promise that resolves to the response of the send message action.
+ */
+```
+```javascript
+emby
+    .deleteMessage(
+        chatId,
+        messageId
+    );
+    .then(response => {
+        console.info('message was successfully deleted', response);
+    })
+    .catch(e => {
+        console.error(e.message);
+    });
+```
+
+#### addParticipantsToChat
+```javascript
+/**
+ * Update a message in a chat.
+ *
+ * @param {string} chatId - The unique identifier for the chat. This parameter is required.
+ * @param {Object[]} participants=[] - An array of participant objects. This parameter is required.
+ * @param {string} participants[].id - The unique identifier for the recipient. This parameter is required.
+ * @param {string} participants[].name - The name of the recipient.
+ * @param {string} [participants[].email] - The name of the recipient.
+ * @param {string} [participants[].link] - The name of the recipient.
+ * @param {string} [participants[].picture] - The name of the recipient.
+ * @param {boolean} [participants[].is_bot=false] - Indicates if the recipient is a bot.
+ * 
+ * @returns {Promise<Object>} A promise that resolves to the response of the update message action.
+ */
+```
+```javascript
+emby
+    .addParticipantsToChat(
+        chatId,
+        [
+            {
+                id: faker.string.alphanumeric(6),
+                name: faker.person.fullName(),
+            },
+            {
+                id: faker.string.alphanumeric(6),
+                name: faker.person.fullName(),
+            },
+            {
+                id: faker.string.alphanumeric(6),
+                name: faker.person.fullName(),
+            },
+            {
+                id: faker.string.alphanumeric(6),
+                name: faker.person.fullName(),
+            }
+        ]
+    );
 ```
