@@ -93,6 +93,14 @@ const normilizeData = function(data, filter = [])
     return result;
 }
 
+const normilizeChat = function (chat) {
+    return normilizeData(chat, ['id', 'title', 'socket_port', 'create']);
+}
+
+const normalizeParticipant = function(participant) {
+    return normilizeData(participant, { id: null, name: null, email: null, link: null, picture: null, is_bot: { default: false } });
+}
+
 const addToSignature = function(signature, data, filterKeys)
 {
     signature = Array.prototype.slice.call(signature);
@@ -160,30 +168,34 @@ class Emby {
 
         if(type === 'post' || type === 'put') {
             sParams = JSON.stringify(params);
-            // options.headers['Content-Length'] = sParams.length;
         }
 
         return new Promise((resolve, reject) => {
             const request = (urlParts.protocol === 'https:' ? https : http).request(options, (res) => {
 
-                if(res.statusCode === 200) {
-                    let rawData = '';
-                    res.setEncoding('utf8');
-        
-                    res.on('data', (chunk) => { rawData += chunk; });
-                    res.on('end', () => {
+                let body = '';
+                res.setEncoding('utf8');
+                res.on('data', (chunk) => { body += chunk; });
+                res.on('end', () => {
+                    const contentType = res.headers['content-type'];
+
+                    if (contentType === 'application/json') {
                         try {
-                            const parsedData = JSON.parse(rawData);
-                            resolve(parsedData);
+                            body = JSON.parse(body);
                         } catch (e) {
                             reject(e);
                         }
-                    });
-                }
-                else {
-                    console.error(new Error(res.statusCode, res.statusMessage));
-                    reject();
-                }
+                    }
+
+                    if (res.statusCode >= 200 && res.statusCode < 400) {
+                        resolve(body);
+                    }
+                    else {
+                        const e = new Error(body);
+                        e.status = res.statusCode;
+                        reject(e);
+                    }
+                });
             })
             .on('error', (e) => {
                 reject(e);
@@ -194,7 +206,7 @@ class Emby {
             }
 
             request.end();
-        })
+        });
     }
 
     /**
@@ -241,7 +253,7 @@ class Emby {
     {
         // check chat parameter
         if(_.isPlainObject(chat)) {
-            chat = normilizeData(chat, ['id', 'title', 'socket_port']);
+            chat = normilizeChat(chat);
         }
         else if(_.isString(chat)) {
             chat = {id: chat};
@@ -310,7 +322,7 @@ class Emby {
         });
 
         if (chat) {
-            signatureParams = addToSignature(signatureParams, chat, ['id', 'title', 'socket_port'])
+            signatureParams = addToSignature(signatureParams, chat, ['id', 'title', 'socket_port', 'create'])
             queryParams['chat'] = chat;
         }
 
@@ -368,7 +380,7 @@ class Emby {
     {
         // check chat parameter
         if(_.isPlainObject(chat)) {
-            chat = normilizeData(chat, ['id', 'title', 'socket_port']);
+            chat = normilizeChat(chat);
         }
         else if(_.isString(chat)) {
             chat = {id: chat};
@@ -441,7 +453,7 @@ class Emby {
             signatureParams = addToSignature(signatureParams, normilizedRecipient, ['id', 'name']);
         });
 
-        signatureParams = addToSignature(signatureParams, chat, ['id', 'title', 'socket_port'])
+        signatureParams = addToSignature(signatureParams, chat, ['id', 'title', 'socket_port', 'create'])
 
         queryParams['signature'] = crypto.createHash('md5').update(signatureParams.join(',')).digest('hex');
 
@@ -509,7 +521,7 @@ class Emby {
             }
         }
 
-        return this.requestApi(`chat/${chatId}/messages`, params);
+        return this.requestApi(`chats/${chatId}/messages`, params);
     }
 
     /**
@@ -522,9 +534,13 @@ class Emby {
      * @param {string} [user.email] - The email of the user.
      * @param {string} [user.picture] - The picture URL of the user.
      * @param {string} [user.link] - The link associated with the user.
-     * @param {Object[]} [recipients] - An array of recipient objects. This parameter is required.
+     * @param {Object[]} [recipients] - An array of recipient objects..
      * @param {string} recipients[].id - The unique identifier for the recipient.
      * @param {string} recipients[].name - The name of the recipient.
+     * @param {string} [recipients[].email] - The name of the recipient.
+     * @param {string} [recipients[].picture] - The name of the recipient.
+     * @param {string} [recipients[].link] - The name of the recipient.
+     * @param {boolean} [recipients[].is_bot=false] - Indicates if the recipient is a bot.
      * @param {string} message - The message content to be sent. This parameter is required.
      * @param {Object[]} [extra=[]] - Additional options for the message.
      * @param {Object[]} [buttons=[]] - An array of button objects to be included with the message.
@@ -539,7 +555,6 @@ class Emby {
     {
         const queryParams = {
             'user': user,
-            'chat_id': chatId,
             'recipients': recipients
         };
 
@@ -557,25 +572,16 @@ class Emby {
             messageData.buttons = buttons;
         }
 
-        // recipients.
-        // {
-        //     $recipientData = [
-        //         'id' => $recipient->getId(),
-        //         'name' => $recipient->getName(),
-        //         'is_bot' => $recipient->getIsBot()
-        //     ];
-
-        //     if ($recipient->getAvatar())
-        //     {
-        //         $recipientData['picture'] = $recipient->getAvatar();
-        //     }
-
-        //     $queryParams['recipients'][] = $recipientData;
-        // }
+        if (_.isFilledArray(recipients)) {
+            const _recipients = recipients.map(normalizeParticipant);
+            if (_.isFilledArray(_recipients)) {
+                queryParams.recipients = _recipients;
+            }
+        }
 
         queryParams.messages = [messageData];
 
-        return this.requestApi(`chat/${chatId}/messages`, queryParams, 'post');
+        return this.requestApi(`chats/${chatId}/messages`, queryParams, 'post');
     }
 
     /**
@@ -625,7 +631,23 @@ class Emby {
             params.return_message = '1'
         }
 
-        return this.requestApi(`chat/${chatId}/messages/${messageId}`, params, 'put');
+        return this.requestApi(`chats/${chatId}/messages/${messageId}`, params, 'put');
+    }
+
+    /**
+     * Update a message in a chat.
+     *
+     * @param {string} chatId - The unique identifier for the chat. This parameter is required.
+     * @param {string} messageId - The unique identifier for the message. This parameter is required.
+     * 
+     * @returns {Promise<Object>} A promise that resolves to the response of the update message action.
+     */
+    deleteMessage(chatId, messageId)
+    {
+        const params = { message: {} };
+        params.message.is_deleted = "1";
+
+        return this.requestApi(`chats/${chatId}/messages/${messageId}`, params, 'put');
     }
 
     /**
@@ -642,7 +664,34 @@ class Emby {
             'user': userId,
         };
 
-        return this.requestApi(`chat/${chatId}/typing`, queryParams, 'put');
+        return this.requestApi(`chats/${chatId}/typing`, queryParams, 'put');
+    }
+
+    /**
+     * Add a participants to a chat.
+     *
+     * @param {string} chatId - The unique identifier for the chat. This parameter is required.
+     * @param {Object[]} participants=[] - An array of participant objects. This parameter is required.
+     * @param {string} participants[].id - The unique identifier for the recipient. This parameter is required.
+     * @param {string} participants[].name - The name of the recipient.
+     * @param {string} [participants[].email] - The name of the recipient.
+     * @param {string} [participants[].picture] - The name of the recipient.
+     * @param {string} [participants[].link] - The name of the recipient.
+     * @param {boolean} [participants[].is_bot=false] - Indicates if the recipient is a bot.
+     * 
+     * @returns {Promise<Object>} A promise that resolves to the response of the send message action.
+     */
+    addParticipantsToChat(chatId, participants = [])
+    {
+        if(! _.isFilledArray(participants)) {
+            throw new Error('participants have to be an array of participant objects');
+        }
+
+        const queryParams = {
+            participants: participants.map(normalizeParticipant)
+        };
+
+        return this.requestApi(`chats/${chatId}/participants`, queryParams, 'post');
     }
 }
 
