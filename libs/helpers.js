@@ -55,6 +55,10 @@ const isString = function(value) {
     return typeof(value) === 'string';
 }
 
+const isNumeric = function(value) {
+    return typeof(value) === 'number';
+}
+
 const isBoolean = function(value, smart = false) {
     return typeof(value) === 'boolean' || (smart && ['yes', 'on', 'true', '1', 'no', 'off', 'false', '0'].indexOf(String(value).toLowerCase()) > - 1);
 }
@@ -103,11 +107,25 @@ const onlyProps = function(object, onlyProps)
     return null;
 }
 
+const randomString = function(len = 10) {
+    let text = '';
+
+    const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+
+    for(let i = 0; i < len; i++)
+    {
+        text+= charset.charAt(Math.floor(Math.random() * charset.length));
+    }
+
+    return text;
+}
+
 module.exports = {
     isExists,
     getValue,
     isScalar,
     isString,
+    isNumeric,
     isBoolean,
     isNoValue,
     isFunction,
@@ -116,5 +134,6 @@ module.exports = {
     isPlainObject,
     isFilledPlainObject,
     isTRUE,
-    onlyProps
+    onlyProps,
+    randomString
 }

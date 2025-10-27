@@ -26,6 +26,20 @@ yarn add @emby-chat/node-sdk
 
 ### Methods
 
+#### deleteChat
+```javascript
+/**
+ * Delete chat
+ *
+ * @param {string} chatId - The unique identifier for the chat. This parameter is required.
+ * 
+ * @returns {Promise<Object>} A promise that resolves to the response of the update message action.
+ */
+```
+```javascript
+emby.deleteChat(chatId);
+```
+
 #### url
 
 ```javascript

@@ -46,7 +46,7 @@ const _trim = function(value)
     return _.isString(value) ? value.trim() : value;
 }
 
-const normilizeData = function(data, filter = [])
+const normalizeData = function(data, filter = [])
 {
     const result = {};
 
@@ -55,10 +55,8 @@ const normilizeData = function(data, filter = [])
     }
 
     let filterFields = [];
-    let isFilterObject = false;
 
     if(_.isFilledPlainObject(filter)) {
-        isFilterObject = true;
         filterFields = Object.keys(filter);
     }
     else if(_.isFilledArray(filter)) {
@@ -93,12 +91,12 @@ const normilizeData = function(data, filter = [])
     return result;
 }
 
-const normilizeChat = function (chat) {
-    return normilizeData(chat, ['id', 'title', 'socket_port', 'create']);
+const normalizeChat = function (chat) {
+    return normalizeData(chat, ['id', 'title', 'socket_port', 'create']);
 }
 
 const normalizeParticipant = function(participant) {
-    return normilizeData(participant, { id: null, name: null, email: null, link: null, picture: null, is_bot: { default: false } });
+    return normalizeData(participant, { id: null, name: null, email: null, link: null, picture: null, is_bot: { default: false } });
 }
 
 const addToSignature = function(signature, data, filterKeys)
@@ -124,10 +122,10 @@ const addToSignature = function(signature, data, filterKeys)
 class Emby {
 
     constructor(config = {}) {
-        this.clientId = config.id;
         this.clientSecret = config.secret;
         this.apiToken = config.api_token;
         this.baseUrl = config.base_url;
+        this.apiUrl = config.api_url || this.baseUrl;
 
         if(_.isString(this.baseUrl)) {
             this.baseUrl = this.baseUrl.replace(/\/$/g, '');
@@ -147,12 +145,13 @@ class Emby {
     {
         let sParams = '';
 
-        //let _url = `${this.baseUrl}/api/${version}/${method}?api_token=${this.apiToken}&`;
-        let _url = `${this.baseUrl}/api/${version}/${method}`;
+        let _url = `${this.apiUrl}/api/${version}/${method}`;
 
         if(!(type === 'post' || type === 'put')) {
             _url+= '?'+querystring.stringify(flatten(params))
         }
+
+        _url = encodeURI(_url);
 
         const urlParts = url.parse(_url);
 
@@ -234,10 +233,10 @@ class Emby {
      * @param {boolean} [options.user.rights.create_pools=false] - Enable or disable creating pools.
      * @param {boolean} [options.user.rights.vote_pool=false] - Enable or disable voting in pools.
      * @param {boolean} [options.user.rights.kick_users=false] - Enable or disable kicking users.
-     * @param {Object[]} [options.recipients=[]] - An array of recipient objects.
-     * @param {string} options.recipients[].id - The unique identifier for the recipient.
-     * @param {string} options.recipients[].name - The name of the recipient.
-     * @param {boolean} [options.recipients[].is_bot=false] - Indicates if the recipient is a bot.
+     * @param {Object[]} [options.participants=[]] - An array of recipient objects.
+     * @param {string} options.participants[].id - The unique identifier for the recipient.
+     * @param {string} options.participants[].name - The name of the recipient.
+     * @param {boolean} [options.participants[].is_bot=false] - Indicates if the recipient is a bot.
      * @param {Object} [options.extra={}] - Additional options.
      * @param {Object} [options.extra.skin_options] - Skin options for the chat interface.
      * @param {boolean} [options.extra.skin_options.display_header=true] - Show or hide header.
@@ -249,11 +248,11 @@ class Emby {
      * 
      * @returns {string} The generated chat URL.
      */
-    url({chat = null, user = {}, recipients = [], extra = {} })
+    url({chat = null, user = {}, participants = [], extra = {} })
     {
         // check chat parameter
         if(_.isPlainObject(chat)) {
-            chat = normilizeChat(chat);
+            chat = normalizeChat(chat);
         }
         else if(_.isString(chat)) {
             chat = {id: chat};
@@ -264,7 +263,7 @@ class Emby {
 
         // check user parameter
         if(_.isPlainObject(user)) {
-            user = normilizeData(user, {
+            user = normalizeData(user, {
                 id: null,
                 name: null,
                 email: null,
@@ -300,13 +299,11 @@ class Emby {
         const rnd = strRandom(32);
 
         let signatureParams = [
-            this.clientId,
             this.clientSecret,
             rnd
         ];
 
         const queryParams = {
-            'client_id': this.clientId,
             'rnd': rnd,
             'user': user,
             'recipients': []
@@ -314,11 +311,11 @@ class Emby {
 
         signatureParams = addToSignature(signatureParams, user, ['id', 'name', 'email', 'link', 'picture']);
  
-        recipients.forEach(recipient => {
-            const normilizedRecipient = normilizeData(recipient, {id: null, name: null, is_bot: {default: false}});
+        participants.forEach(participant => {
+            participant = normalizeData(participant, {id: null, name: null, is_bot: {default: false}});
 
-            queryParams['recipients'].push(normilizedRecipient)
-            signatureParams = addToSignature(signatureParams, normilizedRecipient, ['id', 'name']);
+            queryParams['recipients'].push(participant)
+            signatureParams = addToSignature(signatureParams, participant, ['id', 'name']);
         });
 
         if (chat) {
@@ -361,10 +358,10 @@ class Emby {
      * @param {boolean} [user.rights.create_pools=false] - Enable or disable creating pools.
      * @param {boolean} [user.rights.vote_pool=false] - Enable or disable voting in pools.
      * @param {boolean} [user.rights.kick_users=false] - Enable or disable kicking users.
-     * @param {Object[]} [recipients=[]] - An array of recipient objects.
-     * @param {string} recipients[].id - The unique identifier for the recipient.
-     * @param {string} recipients[].name - The name of the recipient.
-     * @param {boolean} [recipients[].is_bot=false] - Indicates if the recipient is a bot.
+     * @param {Object[]} [participants=[]] - An array of recipient objects.
+     * @param {string} participants[].id - The unique identifier for the recipient.
+     * @param {string} participants[].name - The name of the recipient.
+     * @param {boolean} [participants[].is_bot=false] - Indicates if the recipient is a bot.
      * @param {Object} [extra={}] - Additional options.
      * @param {Object} [extra.skin_options] - Skin options for the chat interface.
      * @param {boolean} [extra.skin_options.display_header=true] - Show or hide header.
@@ -376,11 +373,11 @@ class Emby {
      * 
      * @returns {string} The generated chat URL.
      */
-    urlByChatId(chat = {}, user = {}, recipients = [], extra = {})
+    urlByChatId(chat = {}, user = {}, participants = [], extra = {})
     {
         // check chat parameter
         if(_.isPlainObject(chat)) {
-            chat = normilizeChat(chat);
+            chat = normalizeChat(chat);
         }
         else if(_.isString(chat)) {
             chat = {id: chat};
@@ -395,7 +392,7 @@ class Emby {
 
         // check user parameter
         if(_.isPlainObject(user)) {
-            user = normilizeData(user, {
+            user = normalizeData(user, {
                 id: null,
                 name: null,
                 email: null,
@@ -431,13 +428,11 @@ class Emby {
         const rnd = strRandom(32);
 
         let signatureParams = [
-            this.clientId,
             this.clientSecret,
             rnd
         ];
 
         const queryParams = {
-            'client_id': this.clientId,
             'rnd': rnd,
             'chat': chat,
             'user': user,
@@ -446,11 +441,11 @@ class Emby {
 
         signatureParams = addToSignature(signatureParams, user, ['id', 'name', 'email', 'link', 'picture']);
  
-        recipients.forEach(recipient => {
-            const normilizedRecipient = normilizeData(recipient, {id: null, name: null, is_bot: {default: false}});
+        participants.forEach(participant => {
+            participant = normalizeData(participant, {id: null, name: null, is_bot: {default: false}});
 
-            queryParams['recipients'].push(normilizedRecipient)
-            signatureParams = addToSignature(signatureParams, normilizedRecipient, ['id', 'name']);
+            queryParams['recipients'].push(participant)
+            signatureParams = addToSignature(signatureParams, participant, ['id', 'name']);
         });
 
         signatureParams = addToSignature(signatureParams, chat, ['id', 'title', 'socket_port', 'create'])
@@ -464,6 +459,22 @@ class Emby {
         const query = querystring.stringify(flatten(queryParams));
 
         return `${this.baseUrl}?${query}`;
+    }
+
+    /**
+     * Retrieve chat details by chat ID.
+     *
+     * @param {string} chatId - The unique identifier for the chat. This parameter is required.
+     * 
+     * @returns {Object[]} An Chat object.
+     */
+    getChatInfo(id)
+    {
+        if(!_.isString(id)) {
+            throw new Error(`chat id isn't passed`);
+        }
+
+        return this.requestApi(`chats/${id}`);
     }
 
     /**
@@ -534,15 +545,15 @@ class Emby {
      * @param {string} [user.email] - The email of the user.
      * @param {string} [user.picture] - The picture URL of the user.
      * @param {string} [user.link] - The link associated with the user.
-     * @param {Object[]} [recipients] - An array of recipient objects..
-     * @param {string} recipients[].id - The unique identifier for the recipient.
-     * @param {string} recipients[].name - The name of the recipient.
-     * @param {string} [recipients[].email] - The name of the recipient.
-     * @param {string} [recipients[].picture] - The name of the recipient.
-     * @param {string} [recipients[].link] - The name of the recipient.
-     * @param {boolean} [recipients[].is_bot=false] - Indicates if the recipient is a bot.
+     * @param {Object[]} [participants] - An array of recipient objects. Backend takes into participants only for the new chat, otherwise it will be ignored.
+     * @param {string} participants[].id - The unique identifier for the recipient.
+     * @param {string} participants[].name - The name of the recipient.
+     * @param {string} [participants[].email] - The name of the recipient.
+     * @param {string} [participants[].picture] - The name of the recipient.
+     * @param {string} [participants[].link] - The name of the recipient.
+     * @param {boolean} [participants[].is_bot=false] - Indicates if the recipient is a bot.
      * @param {string} message - The message content to be sent. This parameter is required.
-     * @param {Object[]} [extra=[]] - Additional options for the message.
+     * @param {Object} [extra] - Additional options for the message.
      * @param {Object[]} [buttons=[]] - An array of button objects to be included with the message.
      * @param {string} buttons[].label - The label of the button. This parameter is required.
      * @param {string} buttons[].action - The action associated with the button. This parameter is required.
@@ -551,18 +562,43 @@ class Emby {
      * 
      * @returns {Promise<Object>} A promise that resolves to the response of the send message action.
      */
-    sendMessage(chatId, user, recipients, message, extra = [], buttons = [])
+    sendMessage(chat, user, participants, message, extra = {}, buttons = [])
     {
         const queryParams = {
             'user': user,
-            'recipients': recipients
+            'participants': participants
         };
 
         const messageData = {
             'text': message
         };
 
-        if (_.isFilledArray(extra))
+        // check chat parameter
+        if(_.isPlainObject(chat)) {
+            chat = normalizeChat(chat);
+        }
+        else if(_.isString(chat)) {
+            chat = {id: chat};
+        }
+        else {
+            throw new Error('first parameter(chat) have to be a plain object or string');
+        }
+
+        if(!_.isString(chat.id)) {
+            if(! _.isNumeric(chat.id)) {
+                throw new Error(`chat id isn't passed`);
+            }
+
+            chat.id = chat.id.toString();
+        }
+
+        const chatId = chat.id;
+        delete chat.id;
+        if (Object.keys(chat).length) {
+            queryParams.chat = chat;
+        }
+
+        if (_.isFilledPlainObject(extra))
         {
             messageData.extra = extra;
         }
@@ -572,10 +608,10 @@ class Emby {
             messageData.buttons = buttons;
         }
 
-        if (_.isFilledArray(recipients)) {
-            const _recipients = recipients.map(normalizeParticipant);
-            if (_.isFilledArray(_recipients)) {
-                queryParams.recipients = _recipients;
+        if (_.isFilledArray(participants)) {
+            const _participants = participants.map(normalizeParticipant);
+            if (_.isFilledArray(_participants)) {
+                queryParams.participants = _participants;
             }
         }
 

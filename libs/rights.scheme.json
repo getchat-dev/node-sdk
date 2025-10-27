@@ -61,5 +61,8 @@
   },
   "send_read_state": {
     "type": "boolean"
+  },
+  "leave_chats": {
+    "type": "boolean"
   }
 }
