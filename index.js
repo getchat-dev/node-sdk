@@ -92,7 +92,7 @@ const normalizeData = function(data, filter = [])
 }
 
 const normalizeChat = function (chat) {
-    return normalizeData(chat, ['id', 'title', 'socket_port', 'create']);
+    return normalizeData(chat, ['id', 'title', 'socket_port', 'create', 'type', 'metadata']);
 }
 
 const normalizeParticipant = function(participant) {
@@ -119,6 +119,9 @@ const addToSignature = function(signature, data, filterKeys)
     return signature;
 }
 
+/**
+ * @typedef {'private' | 'group' | 'supergroup' | 'channel'} ChatType
+ */
 class Emby {
 
     constructor(config = {}) {
@@ -538,7 +541,11 @@ class Emby {
     /**
      * Send a message to a chat.
      *
-     * @param {string} chatId - The unique identifier for the chat. This parameter is required.
+     * @param {Object | string} chat - The unique identifier for the chat. This parameter is required.
+     * @param {string} chat.id - The unique identifier for the chat. This parameter is required.
+     * @param {string} [chat.title] - The title of the chat. This parameter is required when creating a new chat.
+     * @param {ChatType} [chat.type] - The type of the chat. This parameter is required when creating a new chat.
+     * @param {Object} [chat.metadata] - Additional metadata for the chat. This parameter is optional.
      * @param {Object} user - The user object sending the message. This parameter is required.
      * @param {string} user.id - The unique identifier for the user.
      * @param {string} [user.name] - The name of the user.
