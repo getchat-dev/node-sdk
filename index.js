@@ -125,6 +125,7 @@ const addToSignature = function(signature, data, filterKeys)
 class Emby {
 
     constructor(config = {}) {
+        this.clientId = config.id;
         this.clientSecret = config.secret;
         this.apiToken = config.api_token;
         this.baseUrl = config.base_url;
@@ -253,6 +254,13 @@ class Emby {
      */
     url({chat = null, user = {}, participants = [], extra = {} })
     {
+        if(! this.clientId) {
+            throw new Error('To generate chat URL client id is required, please set it in the constructor config');
+        }
+        if(! this.clientSecret) {
+            throw new Error('To generate chat URL client secret is required, please set it in the constructor config');
+        }
+
         // check chat parameter
         if(_.isPlainObject(chat)) {
             chat = normalizeChat(chat);
@@ -299,15 +307,15 @@ class Emby {
             throw new Error('user parameter have to be a plain object');
         }
 
-        const rnd = strRandom(32);
+        const nonce = strRandom(32);
 
         let signatureParams = [
-            this.clientSecret,
-            rnd
+            this.clientId,
+            nonce
         ];
 
         const queryParams = {
-            'rnd': rnd,
+            'nonce': nonce,
             'user': user,
             'recipients': []
         };
@@ -326,7 +334,7 @@ class Emby {
             queryParams['chat'] = chat;
         }
 
-        queryParams['signature'] = crypto.createHash('md5').update(signatureParams.join(',')).digest('hex');
+        queryParams['signature'] = crypto.createHmac('sha256', this.clientSecret).update(signatureParams.join(',')).digest('hex');
 
         Object.keys(extra).forEach(key => {
             queryParams[key] = extra[key];
@@ -378,6 +386,13 @@ class Emby {
      */
     urlByChatId(chat = {}, user = {}, participants = [], extra = {})
     {
+        if(! this.clientId) {
+            throw new Error('To generate chat URL client id is required, please set it in the constructor config');
+        }
+        if(! this.clientSecret) {
+            throw new Error('To generate chat URL client secret is required, please set it in the constructor config');
+        }
+
         // check chat parameter
         if(_.isPlainObject(chat)) {
             chat = normalizeChat(chat);
@@ -428,15 +443,15 @@ class Emby {
             throw new Error('second parameter(user) have to be a plain object');
         }
 
-        const rnd = strRandom(32);
+        const nonce = strRandom(32);
 
         let signatureParams = [
             this.clientSecret,
-            rnd
+            nonce
         ];
 
         const queryParams = {
-            'rnd': rnd,
+            'nonce': nonce,
             'chat': chat,
             'user': user,
             'recipients': []
