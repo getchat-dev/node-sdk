@@ -132,7 +132,8 @@ class Emby {
         this.apiUrl = config.api_url || this.baseUrl;
 
         if(_.isString(this.baseUrl)) {
-            this.baseUrl = this.baseUrl.replace(/\/$/g, '');
+            // remove trailing slash
+            this.baseUrl = this.baseUrl.replace(/\/+$/g, '');
         }
     }
 
