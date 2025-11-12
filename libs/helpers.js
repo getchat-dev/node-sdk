@@ -71,6 +71,31 @@ const isScalar = function(value) {
     return ['object', 'undefined'].indexOf(typeof(value)) === -1;
 }
 
+const TYPES = Object.freeze({
+    SCALAR: 1,
+    EMPTY: 2,
+    ARRAY: 3,
+    OBJECT: 4,
+    UNKNOWN: 5
+});
+
+const getType = function(value) {
+    if(isScalar(value)) {
+        return TYPES.SCALAR;
+    }
+    else if(isNoValue(value)) {
+        return TYPES.EMPTY;
+    }
+    else if(isArray(value)) {
+        return TYPES.ARRAY;
+    }
+    else if(isPlainObject(value)) {
+        return TYPES.OBJECT;
+    }
+
+    return TYPES.UNKNOWN;
+}
+
 const isArray = Array.isArray ? Array.isArray : function(value) {
     return Object.prototype.toString.call(value) === '[object Array]';
 }
@@ -120,6 +145,30 @@ const randomString = function(len = 10) {
     return text;
 }
 
+const sort = function(keys) {
+    return keys.sort((a, b) => {
+        const aNum = Number(a);
+        const bNum = Number(b);
+        const aIsNum = !isNaN(aNum) && a.trim() !== "";
+        const bIsNum = !isNaN(bNum) && b.trim() !== "";
+
+        // 1. If both numeric → compare numerically
+        if (aIsNum && bIsNum) {
+            return aNum - bNum;
+        }
+
+        // 2. If one numeric and one string → numeric comes first
+        if (aIsNum && !bIsNum) return -1;
+        if (!aIsNum && bIsNum) return 1;
+
+        // 3. compare as strings (binary-safe, case-sensitive)
+        if (a < b) return -1;
+        if (a > b) return 1;
+
+        return 0;
+    });
+}
+
 module.exports = {
     isExists,
     getValue,
@@ -135,5 +184,8 @@ module.exports = {
     isFilledPlainObject,
     isTRUE,
     onlyProps,
-    randomString
+    randomString,
+    getType,
+    sort,
+    TYPES
 }

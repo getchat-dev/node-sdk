@@ -99,6 +99,16 @@ const normalizeParticipant = function(participant) {
     return normalizeData(participant, { id: null, name: null, email: null, link: null, picture: null, is_bot: { default: false } });
 }
 
+const packObjectForSignature = function(obj, key = '', hasKey = true) {
+    const packed = [];
+
+    _.sort(Object.keys(obj)).forEach(k => {
+        packed.push(`${key ? `${key}.` : ''}${k}=${obj[k]}`);
+    });
+
+    return packed;
+}
+
 const addToSignature = function(signature, data, filterKeys)
 {
     signature = Array.prototype.slice.call(signature);
@@ -108,11 +118,25 @@ const addToSignature = function(signature, data, filterKeys)
     if (keys.length)
     {
         if(_.isFilledArray(filterKeys)) {
-            keys = keys.filter(key => filterKeys.indexOf(key) > -1);
+            // only specified keys and in that order
+            keys = filterKeys.filter(key => keys.indexOf(key) > -1);
         }
-
-        keys.sort().forEach(key => {
-            signature.push(data[key])
+        else {
+            // canonical order
+            keys = _.sort(keys);
+        }
+        
+        keys.forEach(key => {
+            switch(_.getType(data[key])) {
+                case _.TYPES.SCALAR:
+                    signature.push(data[key]);
+                    break;
+                case _.TYPES.OBJECT:
+                    packObjectForSignature(data[key], key, false).forEach(element => {
+                        signature.push(element);
+                    });
+                    break;
+            }
         });
     }
 
@@ -321,7 +345,7 @@ class Emby {
             'recipients': []
         };
 
-        signatureParams = addToSignature(signatureParams, user, ['id', 'name', 'email', 'link', 'picture']);
+        signatureParams = addToSignature(signatureParams, user, ['id', 'name', 'email', 'link', 'picture', 'rights']);
  
         participants.forEach(participant => {
             participant = normalizeData(participant, {id: null, name: null, is_bot: {default: false}});
