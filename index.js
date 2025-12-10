@@ -430,7 +430,7 @@ class Emby {
         }
 
         if(!_.isString(chat.id)) {
-            throw new Error(`chat id isn't passed`);
+            throw new Error('chat id isn\'t passed');
         }
 
         // check user parameter
@@ -514,7 +514,7 @@ class Emby {
     getChatInfo(id)
     {
         if(!_.isString(id)) {
-            throw new Error(`chat id isn't passed`);
+            throw new Error('chat id isn\'t passed');
         }
 
         return this.requestApi(`chats/${id}`);
@@ -599,7 +599,9 @@ class Emby {
      * @param {string} [participants[].picture] - The name of the recipient.
      * @param {string} [participants[].link] - The name of the recipient.
      * @param {boolean} [participants[].is_bot=false] - Indicates if the recipient is a bot.
-     * @param {string} message - The message content to be sent. This parameter is required.
+     * @param {string | Object} message - The message content to be sent. If object, it must contain `text` and may contain optional `recipient_id`.
+     * @param {string} message.text - The message text (required when `message` is an object).
+     * @param {string} [message.recipient_id] - Optional recipient id for this message.
      * @param {Object} [extra] - Additional options for the message.
      * @param {Object[]} [buttons=[]] - An array of button objects to be included with the message.
      * @param {string} buttons[].label - The label of the button. This parameter is required.
@@ -616,9 +618,25 @@ class Emby {
             'participants': participants
         };
 
-        const messageData = {
-            'text': message
-        };
+        const messageData = {};
+
+        if (_.isPlainObject(message)) {
+            message = normalizeData(message, ['text', 'recipient_id']);
+            if (_.isString(message.text)) {
+                messageData.text = message.text;
+            }
+
+            if (!_.isNoValue(message.recipient_id)) {
+                messageData.recipient_id = message.recipient_id;
+            }
+        }
+        else if (_.isString(message)) {
+            messageData.text = message;
+        }
+
+        if(! (_.isString(messageData.text) && messageData.text.length)) {
+            throw new Error('message text is required');
+        }
 
         // check chat parameter
         if(_.isPlainObject(chat)) {
@@ -633,7 +651,7 @@ class Emby {
 
         if(!_.isString(chat.id)) {
             if(! _.isNumeric(chat.id)) {
-                throw new Error(`chat id isn't passed`);
+                throw new Error('chat id isn\'t passed');
             }
 
             chat.id = chat.id.toString();
