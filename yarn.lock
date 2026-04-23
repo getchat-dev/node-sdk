@@ -2,6 +2,25 @@
 # yarn lockfile v1
 
 
+"@biomejs/biome@2.4.13":
+  version "2.4.13"
+  resolved "https://registry.npmjs.org/@biomejs/biome/-/biome-2.4.13.tgz"
+  integrity sha512-gLXOwkOBBg0tr7bDsqlkIh4uFeKuMjxvqsrb1Tukww1iDmHcfr4Uu8MoQxp0Rcte+69+osRNWXwHsu/zxT6XqA==
+  optionalDependencies:
+    "@biomejs/cli-darwin-arm64" "2.4.13"
+    "@biomejs/cli-darwin-x64" "2.4.13"
+    "@biomejs/cli-linux-arm64" "2.4.13"
+    "@biomejs/cli-linux-arm64-musl" "2.4.13"
+    "@biomejs/cli-linux-x64" "2.4.13"
+    "@biomejs/cli-linux-x64-musl" "2.4.13"
+    "@biomejs/cli-win32-arm64" "2.4.13"
+    "@biomejs/cli-win32-x64" "2.4.13"
+
+"@biomejs/cli-darwin-arm64@2.4.13":
+  version "2.4.13"
+  resolved "https://registry.npmjs.org/@biomejs/cli-darwin-arm64/-/cli-darwin-arm64-2.4.13.tgz"
+  integrity sha512-2KImO1jhNFBa2oWConyr0x6flxbQpGKv6902uGXpYM62Xyem8U80j441SyUJ8KyngsmKbQjeIv1q2CQfDkNnYg==
+
 "@faker-js/faker@^8.4.1":
   version "8.4.1"
   resolved "https://registry.npmjs.org/@faker-js/faker/-/faker-8.4.1.tgz"
