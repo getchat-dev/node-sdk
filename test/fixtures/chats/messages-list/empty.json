@@ -1,0 +1,10 @@
+{
+    "status": 200,
+    "body": {
+        "status": true,
+        "messages": {},
+        "messages_sort": [],
+        "meta": { "total": 0, "output": 0 },
+        "pagination": { "items_per_page": 50, "current": 1, "total": 0 }
+    }
+}
