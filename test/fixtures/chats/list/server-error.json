@@ -1,0 +1,7 @@
+{
+  "status": 500,
+  "body": {
+    "status": false,
+    "message": "Internal server error"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "status": 401,
+  "body": {
+    "status": false,
+    "message": "Unauthorized: invalid or missing api token"
+  }
+}

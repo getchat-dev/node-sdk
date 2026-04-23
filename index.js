@@ -361,6 +361,70 @@ class Emby {
     }
 
     /**
+     * Retrieve a list of chats.
+     *
+     * @param {Object} [queryParams={}] - The query parameters to filter chats.
+     * @param {number} [queryParams.page=1] - The page number for pagination. Defaults to 1.
+     * @param {number} [queryParams.limit=1] - The number of chats to retrieve per page. Defaults to 1.
+     * @param {('private'|'group'|'supergroup'|'channel')} [queryParams.type] - Filter by chat type.
+     * @param {1|0} [queryParams.with_owners] - Include owner details in the response (1 or 0).
+     * @param {string} [queryParams.owner] - Filter chats by owner ID.
+     * @param {string} [queryParams.created_from] - Filter chats created after this timestamp (ISO 8601).
+     * @param {string} [queryParams.created_to] - Filter chats created before this timestamp (ISO 8601).
+     * @param {string} [queryParams.last_message_from] - Filter chats with last message after this timestamp (ISO 8601).
+     * @param {string} [queryParams.last_message_to] - Filter chats with last message before this timestamp (ISO 8601).
+     * @param {Object} [queryParams.metadata] - Filter by chat metadata (e.g., { 'key': 'value' }).
+     *
+     * @returns {Promise<Object>} A promise that resolves to an object containing chats and pagination details.
+     */
+    getChats(queryParams = {}) {
+        if (!_.isPlainObject(queryParams)) {
+            throw new Error('queryParams must be a plain object');
+        }
+
+        const params = {};
+
+        // 1. Pagination
+        // Default to page 1, limit 1. Max limit is assumed to be 1000.
+        params.page = Math.max(parseInt(queryParams.page, 10) || 1, 1);
+        params.limit = Math.min(parseInt(queryParams.limit, 10) || 1, 1000);
+
+        // 2. Filter and normalize other parameters
+        const availableParams = [
+            'type',
+            'owner',
+            'with_owners',
+            'created_from',
+            'created_to',
+            'last_message_from',
+            'last_message_to',
+        ];
+
+        availableParams.forEach((key) => {
+            if (!_.isNoValue(queryParams[key])) {
+                if (key === 'with_owners') {
+                    // Map boolean/truthy to 1, otherwise assume it's a numeric 0 or 1
+                    if (_.isBoolean(queryParams[key]) || _.isTRUE(queryParams[key])) {
+                        params[key] = 1;
+                    } else if (_.isNumeric(queryParams[key])) {
+                        params[key] = parseInt(queryParams[key], 10);
+                    }
+                } else if (_.isString(queryParams[key]) && queryParams[key].length > 0) {
+                    params[key] = queryParams[key];
+                }
+            }
+        });
+
+        // 3. Metadata filter
+        // The existing `flatten` utility will convert `{ metadata: { key: 'value' } }` into `metadata[key]=value`
+        if (_.isFilledPlainObject(queryParams.metadata)) {
+            params.metadata = queryParams.metadata;
+        }
+
+        return this.requestApi('chats', params, 'get');
+    }
+
+    /**
      * Retrieve chat details by chat ID.
      *
      * @param {string} chatId - The unique identifier for the chat. This parameter is required.

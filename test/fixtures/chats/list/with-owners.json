@@ -1,0 +1,28 @@
+{
+  "status": 200,
+  "body": {
+    "status": true,
+    "chats": {
+      "c1": {
+        "id": "c1",
+        "type": "private",
+        "title": "Support",
+        "owner_id": "u-owner",
+        "created_at": "2026-03-01T10:00:00Z",
+        "updated_at": "2026-03-10T12:00:00Z"
+      }
+    },
+    "chats_sort": ["c1"],
+    "users": {
+      "u-owner": {
+        "id": "u-owner",
+        "name": "Chat Owner",
+        "email": "owner@example.com",
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-03-01T00:00:00Z"
+      }
+    },
+    "meta": { "total": 1, "output": 1 },
+    "pagination": { "items_per_page": 50, "current": 1, "total": 1 }
+  }
+}

@@ -57,7 +57,10 @@ describe('libs/helpers.js', () => {
             assert.equal(_.isTRUE('yes'), true);
             assert.equal(_.isTRUE('YES'), true);
             assert.equal(_.isTRUE('on'), true);
+            assert.equal(_.isTRUE('ON'), true);
             assert.equal(_.isTRUE('true'), true);
+            assert.equal(_.isTRUE('TRUE'), true);
+            assert.equal(_.isTRUE('TruE'), true);
             assert.equal(_.isTRUE('1'), true);
         });
         test('false for everything else', () => {
