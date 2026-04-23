@@ -1,17 +1,17 @@
-const { test, describe } = require('node:test');
-const assert = require('node:assert/strict');
-const {
-    strRandom,
+import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
+import {
+    addToSignature,
     flatten,
-    normalizeData,
     normalizeChat,
+    normalizeData,
     normalizeParticipant,
     packObjectForSignature,
-    addToSignature,
-} = require('../../libs/signing');
-const { stubMathRandom } = require('../helpers/seededRandom');
+    strRandom,
+} from '../../src/libs/signing';
+import { stubMathRandom } from '../helpers/seededRandom';
 
-describe('libs/signing.js', () => {
+describe('libs/signing', () => {
     describe('strRandom', () => {
         test('default length is 10, only alphanumeric', () => {
             const s = strRandom();
@@ -23,7 +23,6 @@ describe('libs/signing.js', () => {
             assert.equal(strRandom(32).length, 32);
         });
         test('deterministic with stubbed Math.random', () => {
-            // 0 * 62 → 'a' (first char of charset)
             const restore = stubMathRandom([0, 0, 0]);
             try {
                 assert.equal(strRandom(3), 'aaa');
@@ -52,8 +51,8 @@ describe('libs/signing.js', () => {
         test('arrays are treated as objects with numeric keys', () => {
             assert.deepEqual(flatten({ tags: ['red', 'blue'] }), { 'tags[0]': 'red', 'tags[1]': 'blue' });
         });
-        test('null nested value throws (SDK paths never feed null here — normalizeData strips it first)', () => {
-            assert.throws(() => flatten({ x: null }), TypeError);
+        test('null nested value is emitted as-is (not recursed)', () => {
+            assert.deepEqual(flatten({ x: null }), { x: null });
         });
     });
 
@@ -82,7 +81,7 @@ describe('libs/signing.js', () => {
             assert.deepEqual(out, { a: 1 });
         });
         test('process function can transform values', () => {
-            const out = normalizeData({ n: 3 }, { n: { process: (v) => v * 10 } });
+            const out = normalizeData({ n: 3 }, { n: { process: (v) => (v as number) * 10 } });
             assert.deepEqual(out, { n: 30 });
         });
         test('process returning undefined drops the key', () => {

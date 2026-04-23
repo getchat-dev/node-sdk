@@ -1,11 +1,15 @@
-const { test, describe, before, after, beforeEach } = require('node:test');
-const assert = require('node:assert/strict');
-const { startMockServer } = require('../helpers/mockServer');
-const { makeSdk } = require('../helpers/sdkFactory');
-const { loadFixture } = require('../helpers/loadFixture');
+import assert from 'node:assert/strict';
+import { after, before, beforeEach, describe, test } from 'node:test';
+import type { Emby } from '../../src/index';
+import { loadFixture } from '../helpers/loadFixture';
+import { type MockServer, startMockServer } from '../helpers/mockServer';
+import { makeSdk } from '../helpers/sdkFactory';
+
+type HttpErr = Error & { status?: number };
 
 describe('Emby.sendTyping()', () => {
-    let server, sdk;
+    let server: MockServer;
+    let sdk: Emby;
 
     before(async () => {
         server = await startMockServer();
@@ -23,7 +27,7 @@ describe('Emby.sendTyping()', () => {
 
         await sdk.sendTyping('c1', 'u-author');
 
-        const req = server.lastRequest;
+        const req = server.lastRequest!;
         assert.equal(req.method, 'PUT');
         assert.equal(req.path, '/api/v1/chats/c1/typing');
         assert.deepEqual(req.body, { user: 'u-author' });
@@ -31,6 +35,6 @@ describe('Emby.sendTyping()', () => {
 
     test('500 server error', async () => {
         server.respondWith(loadFixture('chats/send-typing/server-error'));
-        await assert.rejects(sdk.sendTyping('c1', 'u-author'), (err) => err.status === 500);
+        await assert.rejects(sdk.sendTyping('c1', 'u-author'), (err) => (err as HttpErr).status === 500);
     });
 });

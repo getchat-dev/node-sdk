@@ -1,15 +1,15 @@
-const { test, describe } = require('node:test');
-const assert = require('node:assert/strict');
-const _ = require('../../libs/helpers');
+import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
+import * as _ from '../../src/libs/helpers';
 
-describe('libs/helpers.js', () => {
+describe('libs/helpers', () => {
     describe('isNoValue', () => {
         test('true for null and undefined', () => {
             assert.equal(_.isNoValue(null), true);
             assert.equal(_.isNoValue(undefined), true);
         });
         test('false for everything else', () => {
-            for (const v of [0, '', 'x', false, true, [], {}, NaN]) {
+            for (const v of [0, '', 'x', false, true, [], {}, Number.NaN]) {
                 assert.equal(_.isNoValue(v), false, `value=${String(v)}`);
             }
         });
@@ -29,7 +29,7 @@ describe('libs/helpers.js', () => {
         test('positive and negative cases', () => {
             assert.equal(_.isNumeric(0), true);
             assert.equal(_.isNumeric(-1.5), true);
-            assert.equal(_.isNumeric(NaN), true); // typeof NaN === 'number'
+            assert.equal(_.isNumeric(Number.NaN), true); // typeof NaN === 'number'
             assert.equal(_.isNumeric('1'), false);
             assert.equal(_.isNumeric(null), false);
         });
@@ -90,8 +90,8 @@ describe('libs/helpers.js', () => {
             assert.equal(_.isArray({}), false);
         });
         test('isFilledArray', () => {
-            assert.equal(_.isFilledArray([]), 0); // returns value.length
-            assert.equal(_.isFilledArray([1]), 1);
+            assert.equal(_.isFilledArray([]), false);
+            assert.equal(_.isFilledArray([1]), true);
             assert.equal(_.isFilledArray({}), false);
         });
     });
@@ -105,8 +105,8 @@ describe('libs/helpers.js', () => {
             assert.equal(_.isPlainObject(new Date()), false);
         });
         test('isFilledPlainObject requires at least one key', () => {
-            assert.equal(_.isFilledPlainObject({}), 0);
-            assert.equal(_.isFilledPlainObject({ a: 1 }), 1);
+            assert.equal(_.isFilledPlainObject({}), false);
+            assert.equal(_.isFilledPlainObject({ a: 1 }), true);
             assert.equal(_.isFilledPlainObject([]), false);
         });
     });
@@ -145,6 +145,7 @@ describe('libs/helpers.js', () => {
         test('no path returns true (vacuous)', () => {
             assert.equal(_.isExists({ a: 1 }), true);
             assert.equal(_.isExists({ a: 1 }, null), true);
+            assert.equal(_.isExists({ a: 1 }, []), true);
         });
     });
 

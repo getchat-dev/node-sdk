@@ -2,17 +2,39 @@
   "name": "@emby-chat/node-sdk",
   "version": "1.12.1",
   "description": "Official Node SDK for Emby Chat",
-  "main": "index.js",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/cjs/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/cjs/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
-    "test": "node --test --test-reporter=spec 'test/unit/*.test.js' 'test/integration/*.test.js'",
-    "test:watch": "node --test --watch 'test/unit/*.test.js' 'test/integration/*.test.js'",
-    "coverage": "mkdir -p coverage && node --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/lcov.info --test-reporter=spec --test-reporter-destination=stdout 'test/unit/*.test.js' 'test/integration/*.test.js'",
+    "build": "npm run build:clean && npm run build:cjs && npm run build:esm && npm run build:pkgjson",
+    "build:clean": "rm -rf dist",
+    "build:cjs": "tsc -p tsconfig.cjs.json",
+    "build:esm": "tsc -p tsconfig.esm.json",
+    "build:pkgjson": "node -e \"require('fs').writeFileSync('dist/cjs/package.json','{\\\"type\\\":\\\"commonjs\\\"}'); require('fs').writeFileSync('dist/esm/package.json','{\\\"type\\\":\\\"module\\\"}')\"",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "node --test --test-reporter=spec --import tsx 'test/unit/*.test.ts' 'test/integration/*.test.ts'",
+    "test:watch": "node --test --watch --import tsx 'test/unit/*.test.ts' 'test/integration/*.test.ts'",
+    "coverage": "mkdir -p coverage && node --test --experimental-test-coverage --import tsx --test-reporter=lcov --test-reporter-destination=coverage/lcov.info --test-reporter=spec --test-reporter-destination=stdout 'test/unit/*.test.ts' 'test/integration/*.test.ts'",
     "coverage:ci": "npm run coverage && node scripts/coverage-gate.js",
-    "demo": "node --watch -r dotenv/config demo/index.js",
+    "demo": "npm run build:cjs && node --watch -r dotenv/config demo/index.js",
     "lint": "biome lint .",
     "format": "biome format --write .",
     "check": "biome check .",
-    "check:fix": "biome check --write ."
+    "check:fix": "biome check --write .",
+    "prepublishOnly": "npm run build"
   },
   "repository": {
     "type": "git",
@@ -36,8 +58,11 @@
   "devDependencies": {
     "@biomejs/biome": "2.4.13",
     "@faker-js/faker": "^8.4.1",
+    "@types/node": "^25.6.0",
     "dotenv": "^16.0.0",
     "ejs": "^3.1.6",
-    "express": "^4.18.1"
+    "express": "^4.18.1",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3"
   }
 }

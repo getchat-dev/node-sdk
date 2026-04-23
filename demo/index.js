@@ -1,5 +1,5 @@
 const express = require('express');
-const Emby = require('../index.js');
+const { Emby } = require('../dist/cjs');
 const path = require('node:path');
 
 const emby = new Emby({

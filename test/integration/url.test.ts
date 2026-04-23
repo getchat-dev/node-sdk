@@ -1,9 +1,9 @@
-const { test, describe, beforeEach, afterEach } = require('node:test');
-const assert = require('node:assert/strict');
-const crypto = require('node:crypto');
-const querystring = require('node:querystring');
-const Emby = require('../../index.js');
-const { stubMathRandom } = require('../helpers/seededRandom');
+import assert from 'node:assert/strict';
+import * as crypto from 'node:crypto';
+import * as querystring from 'node:querystring';
+import { afterEach, beforeEach, describe, test } from 'node:test';
+import { Emby } from '../../src/index';
+import { stubMathRandom } from '../helpers/seededRandom';
 
 const CONFIG = Object.freeze({
     id: 'test-client-id',
@@ -12,20 +12,19 @@ const CONFIG = Object.freeze({
     base_url: 'https://chat.example',
 });
 
-// Deterministic Math.random that yields byte 0 → 'a' (first charset char).
-// strRandom(32) with all-zeros produces 32 x 'a'.
-const predictableNonce = (char, len = 32) => char.repeat(len);
+const predictableNonce = (char: string, len = 32): string => char.repeat(len);
 
-const expectedHmac = (secret, parts) => crypto.createHmac('sha256', secret).update(parts.join(',')).digest('hex');
+const expectedHmac = (secret: string, parts: Array<string | number>): string =>
+    crypto.createHmac('sha256', secret).update(parts.join(',')).digest('hex');
 
-const parseQuery = (urlStr) => {
+const parseQuery = (urlStr: string): querystring.ParsedUrlQuery => {
     const q = urlStr.split('?')[1] || '';
     return querystring.parse(q);
 };
 
 describe('Emby.url()', () => {
-    let sdk;
-    let restore;
+    let sdk: Emby;
+    let restore: (() => void) | null = null;
 
     beforeEach(() => {
         sdk = new Emby(CONFIG);
@@ -48,11 +47,14 @@ describe('Emby.url()', () => {
     });
 
     test('throws when user is not a plain object', () => {
-        assert.throws(() => sdk.url({ user: 'nope' }), /user parameter have to be a plain object/);
+        assert.throws(
+            () => sdk.url({ user: 'nope' as unknown as { id: string } }),
+            /user parameter have to be a plain object/,
+        );
     });
 
     test('minimal call: user only — signature is HMAC-SHA256(secret, clientId,nonce,u1,User)', () => {
-        restore = stubMathRandom([0]); // strRandom produces all 'a'
+        restore = stubMathRandom([0]);
         const nonce = predictableNonce('a', 32);
 
         const out = sdk.url({ user: { id: 'u1', name: 'User' } });
@@ -64,7 +66,7 @@ describe('Emby.url()', () => {
 
         const expected = expectedHmac(CONFIG.secret, [CONFIG.id, nonce, 'u1', 'User']);
         assert.equal(qs.signature, expected);
-        assert.equal(qs.signature.length, 64); // SHA-256 hex = 64 chars
+        assert.equal((qs.signature as string).length, 64);
     });
 
     test('chat as string is coerced to { id }', () => {
@@ -75,7 +77,6 @@ describe('Emby.url()', () => {
 
         const qs = parseQuery(out);
         assert.equal(qs['chat[id]'], 'c-abc');
-        // chat.id participates in signature after user
         const expected = expectedHmac(CONFIG.secret, [CONFIG.id, nonce, 'u1', 'c-abc']);
         assert.equal(qs.signature, expected);
     });
@@ -85,7 +86,7 @@ describe('Emby.url()', () => {
         const nonce = predictableNonce('a', 32);
 
         const out = sdk.url({
-            chat: { id: 'c1', title: 'Room', bogus: 'ignored' },
+            chat: { id: 'c1', title: 'Room', bogus: 'ignored' } as unknown as { id: string; title: string },
             user: { id: 'u1' },
         });
 
@@ -114,7 +115,7 @@ describe('Emby.url()', () => {
         restore = stubMathRandom([0]);
         const nonce = predictableNonce('a', 32);
 
-        const out = sdk.url({ chat: 123, user: { id: 'u1' } });
+        const out = sdk.url({ chat: 123 as unknown as string, user: { id: 'u1' } });
         const qs = parseQuery(out);
         assert.equal(qs['chat[id]'], undefined);
         const expected = expectedHmac(CONFIG.secret, [CONFIG.id, nonce, 'u1']);
@@ -139,7 +140,6 @@ describe('Emby.url()', () => {
         assert.equal(qs['recipients[0][is_bot]'], 'false');
         assert.equal(qs['recipients[1][id]'], 'p2');
 
-        // sig = clientId, nonce, user.id, p1.id, p1.name, p2.id, p2.name
         const expected = expectedHmac(CONFIG.secret, [CONFIG.id, nonce, 'u1', 'p1', 'Alice', 'p2', 'Bob']);
         assert.equal(qs.signature, expected);
     });
@@ -151,7 +151,10 @@ describe('Emby.url()', () => {
         const out = sdk.url({
             user: {
                 id: 'u1',
-                rights: { send_messages: true, edit_messages: 'any', bogus: 'drop' },
+                rights: { send_messages: true, edit_messages: 'any', bogus: 'drop' } as unknown as Record<
+                    string,
+                    unknown
+                >,
             },
         });
 
@@ -160,7 +163,6 @@ describe('Emby.url()', () => {
         assert.equal(qs['user[rights][edit_messages]'], 'any');
         assert.equal(qs['user[rights][bogus]'], undefined);
 
-        // rights is an OBJECT — packObjectForSignature emits sorted dot-notation
         const expected = expectedHmac(CONFIG.secret, [
             CONFIG.id,
             nonce,
@@ -178,7 +180,7 @@ describe('Emby.url()', () => {
         const out = sdk.url({
             user: {
                 id: 'u1',
-                rights: { bogus: 'x', pin_messages: 'invalid-enum' },
+                rights: { bogus: 'x', pin_messages: 'invalid-enum' } as unknown as Record<string, unknown>,
             },
         });
         const qs = parseQuery(out);
@@ -207,7 +209,6 @@ describe('Emby.url()', () => {
 
     test('session auto-generated when user.id is missing', () => {
         restore = stubMathRandom([0]);
-        // when user.id absent, session is generated via strRandom(40) → 'a' * 40
         const out = sdk.url({ user: { name: 'Anon' } });
         const qs = parseQuery(out);
         assert.equal(qs['user[session]'], 'a'.repeat(40));
@@ -228,8 +229,8 @@ describe('Emby.url()', () => {
 });
 
 describe('Emby.urlByChatId()', () => {
-    let sdk;
-    let restore;
+    let sdk: Emby;
+    let restore: (() => void) | null = null;
 
     beforeEach(() => {
         sdk = new Emby(CONFIG);
@@ -252,7 +253,7 @@ describe('Emby.urlByChatId()', () => {
     });
 
     test('throws when chat is neither object nor string', () => {
-        assert.throws(() => sdk.urlByChatId(123, { id: 'u1' }), /chat.*object or string/);
+        assert.throws(() => sdk.urlByChatId(123 as unknown as string, { id: 'u1' }), /chat.*object or string/);
     });
 
     test('throws when chat has no id', () => {
@@ -260,7 +261,7 @@ describe('Emby.urlByChatId()', () => {
     });
 
     test('throws when user is not a plain object', () => {
-        assert.throws(() => sdk.urlByChatId('c1', 'not-object'), /user.*plain object/);
+        assert.throws(() => sdk.urlByChatId('c1', 'not-object' as unknown as { id: string }), /user.*plain object/);
     });
 
     test('signature is MD5 of [clientSecret, nonce, user fields, chat fields]', () => {
@@ -279,7 +280,7 @@ describe('Emby.urlByChatId()', () => {
             .update([CONFIG.secret, nonce, 'u1', 'User', 'c1'].join(','))
             .digest('hex');
         assert.equal(qs.signature, expected);
-        assert.equal(qs.signature.length, 32); // MD5 hex = 32 chars
+        assert.equal((qs.signature as string).length, 32);
     });
 
     test('rights are EXCLUDED from signature (unlike url())', () => {
@@ -288,14 +289,12 @@ describe('Emby.urlByChatId()', () => {
 
         const out = sdk.urlByChatId('c1', {
             id: 'u1',
-            rights: { send_messages: true, edit_messages: 'my' },
+            rights: { send_messages: true, edit_messages: 'my' } as unknown as Record<string, unknown>,
         });
 
         const qs = parseQuery(out);
-        // rights still pass through in query (they are in user normalization)
         assert.equal(qs['user[rights][send_messages]'], '1');
 
-        // but the signature is the same as without rights
         const expectedWithoutRights = crypto
             .createHash('md5')
             .update([CONFIG.secret, nonce, 'u1', 'c1'].join(','))

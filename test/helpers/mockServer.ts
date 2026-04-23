@@ -1,37 +1,47 @@
-const http = require('node:http');
+import * as http from 'node:http';
 
-/**
- * Start an ephemeral-port HTTP mock server used to intercept SDK requests.
- *
- * Usage:
- *   const server = await startMockServer();
- *   server.respondWith({ status: 200, body: { ok: true } });
- *   // ... SDK call against server.baseUrl ...
- *   server.lastRequest // { method, path, headers, body (parsed), rawBody }
- *   await server.close();
- *
- * Options per response:
- *   - status (number, default 200)
- *   - body (serialized via JSON.stringify if contentType is application/json)
- *   - rawBody (raw string to send — overrides body)
- *   - contentType (default 'application/json')
- *   - headers (extra response headers)
- *   - closeSocket (boolean — server destroys the socket before replying)
- *   - delayMs (number — wait before replying)
- */
-function startMockServer() {
-    const responses = [];
-    const requests = [];
+export interface MockResponse {
+    status?: number;
+    body?: unknown;
+    rawBody?: string;
+    contentType?: string;
+    headers?: Record<string, string>;
+    closeSocket?: boolean;
+    delayMs?: number;
+}
+
+export interface CapturedRequest {
+    method: string | undefined;
+    path: string | undefined;
+    headers: http.IncomingHttpHeaders;
+    body: unknown;
+    rawBody: string;
+}
+
+export interface MockServer {
+    server: http.Server;
+    baseUrl: string;
+    respondWith(spec: MockResponse): MockServer;
+    readonly requests: CapturedRequest[];
+    readonly lastRequest: CapturedRequest | undefined;
+    readonly pendingResponses: number;
+    close(): Promise<void>;
+    reset(): void;
+}
+
+export function startMockServer(): Promise<MockServer> {
+    const responses: MockResponse[] = [];
+    const requests: CapturedRequest[] = [];
 
     const server = http.createServer((req, res) => {
         let raw = '';
         req.setEncoding('utf8');
-        req.on('data', (chunk) => {
+        req.on('data', (chunk: string) => {
             raw += chunk;
         });
         req.on('end', async () => {
             const contentType = req.headers['content-type'] || '';
-            let body = raw;
+            let body: unknown = raw;
             if (raw && contentType.startsWith('application/json')) {
                 try {
                     body = JSON.parse(raw);
@@ -55,7 +65,7 @@ function startMockServer() {
             }
 
             if (next.delayMs) {
-                await new Promise((r) => setTimeout(r, next.delayMs));
+                await new Promise<void>((r) => setTimeout(r, next.delayMs));
             }
 
             if (next.closeSocket) {
@@ -64,7 +74,7 @@ function startMockServer() {
             }
 
             const status = next.status || 200;
-            const headers = {
+            const headers: Record<string, string> = {
                 'content-type': next.contentType || 'application/json',
                 ...(next.headers || {}),
             };
@@ -83,43 +93,38 @@ function startMockServer() {
         });
     });
 
-    return new Promise((resolve) => {
+    return new Promise<MockServer>((resolve) => {
         server.listen(0, '127.0.0.1', () => {
-            const { port } = server.address();
+            const addr = server.address();
+            const port = typeof addr === 'object' && addr ? addr.port : 0;
             const baseUrl = `http://127.0.0.1:${port}`;
 
-            resolve({
+            const api: MockServer = {
                 server,
                 baseUrl,
-                /** Queue a response for the next request. Can be called multiple times. */
-                respondWith(spec) {
+                respondWith(spec: MockResponse) {
                     responses.push(spec);
-                    return this;
+                    return api;
                 },
-                /** Convenience: all pending requests captured so far. */
                 get requests() {
                     return requests.slice();
                 },
-                /** The last captured request (or undefined). */
                 get lastRequest() {
                     return requests[requests.length - 1];
                 },
-                /** Number of queued responses still unused. */
                 get pendingResponses() {
                     return responses.length;
                 },
-                /** Stop the server and release the port. */
                 close() {
-                    return new Promise((res) => server.close(() => res()));
+                    return new Promise<void>((r) => server.close(() => r()));
                 },
-                /** Reset captured requests and queued responses between subtests. */
                 reset() {
                     requests.length = 0;
                     responses.length = 0;
                 },
-            });
+            };
+
+            resolve(api);
         });
     });
 }
-
-module.exports = { startMockServer };

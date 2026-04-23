@@ -1,12 +1,12 @@
-const { test, describe } = require('node:test');
-const assert = require('node:assert/strict');
-const processUserRights = require('../../libs/processUserRights');
-const scheme = require('../../libs/rights.scheme.json');
+import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
+import processUserRights from '../../src/libs/processUserRights';
+import { rightsScheme as scheme } from '../../src/libs/rights.scheme';
 
-const BOOLEAN_RIGHTS = Object.keys(scheme).filter((k) => scheme[k].type === 'boolean');
-const ENUM_RIGHTS = Object.keys(scheme).filter((k) => scheme[k].type === 'enum');
+const BOOLEAN_RIGHTS = (Object.keys(scheme) as Array<keyof typeof scheme>).filter((k) => scheme[k].type === 'boolean');
+const ENUM_RIGHTS = (Object.keys(scheme) as Array<keyof typeof scheme>).filter((k) => scheme[k].type === 'enum');
 
-describe('libs/processUserRights.js', () => {
+describe('libs/processUserRights', () => {
     test('returns null for empty input', () => {
         assert.equal(processUserRights({}), null);
         assert.equal(processUserRights(), null);
@@ -18,7 +18,7 @@ describe('libs/processUserRights.js', () => {
     });
 
     describe('boolean rights (14 total)', () => {
-        test(`all 14 schema rights of type=boolean are covered`, () => {
+        test('all 14 schema rights of type=boolean are covered', () => {
             assert.equal(BOOLEAN_RIGHTS.length, 14);
         });
 
@@ -37,7 +37,7 @@ describe('libs/processUserRights.js', () => {
     });
 
     describe('enum rights (3 total)', () => {
-        test(`all 3 schema rights of type=enum are covered`, () => {
+        test('all 3 schema rights of type=enum are covered', () => {
             assert.equal(ENUM_RIGHTS.length, 3);
         });
 
@@ -63,9 +63,7 @@ describe('libs/processUserRights.js', () => {
         });
 
         test('colon-prefixed values preserve the full string, validate first segment', () => {
-            // 'my:extra' → first segment 'my' validates, full value preserved.
             assert.deepEqual(processUserRights({ edit_messages: 'my:extra' }), { edit_messages: 'my:extra' });
-            // invalid first segment
             assert.equal(processUserRights({ edit_messages: 'xx:extra' }), null);
         });
 
