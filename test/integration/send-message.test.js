@@ -11,8 +11,12 @@ describe('Emby.sendMessage()', () => {
         server = await startMockServer();
         sdk = makeSdk(server.baseUrl);
     });
-    after(async () => { await server.close(); });
-    beforeEach(() => { server.reset(); });
+    after(async () => {
+        await server.close();
+    });
+    beforeEach(() => {
+        server.reset();
+    });
 
     const USER = { id: 'u1', name: 'User' };
 
@@ -51,9 +55,7 @@ describe('Emby.sendMessage()', () => {
 
         await sdk.sendMessage('c1', USER, [], { text: 'targeted', recipient_id: 'r42' });
 
-        assert.deepEqual(server.lastRequest.body.messages, [
-            { text: 'targeted', recipient_id: 'r42' },
-        ]);
+        assert.deepEqual(server.lastRequest.body.messages, [{ text: 'targeted', recipient_id: 'r42' }]);
     });
 
     test('buttons are attached to the message', async () => {
@@ -89,7 +91,7 @@ describe('Emby.sendMessage()', () => {
                 { id: 'p1', name: 'Alice', bogus: 'drop' },
                 { id: 'p2', name: 'Bot', is_bot: true },
             ],
-            'hi'
+            'hi',
         );
 
         assert.deepEqual(server.lastRequest.body.participants, [
@@ -105,13 +107,15 @@ describe('Emby.sendMessage()', () => {
             { id: 'c-new', title: 'Support', type: 'private', metadata: { dep: 'cs' } },
             USER,
             [],
-            'first message'
+            'first message',
         );
 
         assert.equal(server.lastRequest.path, '/api/v1/chats/c-new/messages');
         // chat.id is stripped from body (used only in path); remaining chat fields go in body.chat
         assert.deepEqual(server.lastRequest.body.chat, {
-            title: 'Support', type: 'private', metadata: { dep: 'cs' },
+            title: 'Support',
+            type: 'private',
+            metadata: { dep: 'cs' },
         });
     });
 

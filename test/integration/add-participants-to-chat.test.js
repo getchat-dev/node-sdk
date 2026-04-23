@@ -11,8 +11,12 @@ describe('Emby.addParticipantsToChat()', () => {
         server = await startMockServer();
         sdk = makeSdk(server.baseUrl);
     });
-    after(async () => { await server.close(); });
-    beforeEach(() => { server.reset(); });
+    after(async () => {
+        await server.close();
+    });
+    beforeEach(() => {
+        server.reset();
+    });
 
     test('throws on empty participants list', () => {
         assert.throws(() => sdk.addParticipantsToChat('c1', []), /array of participant objects/);
@@ -41,9 +45,7 @@ describe('Emby.addParticipantsToChat()', () => {
 
         await sdk.addParticipantsToChat('c1', [{ id: 'bot-1', name: 'Bot', is_bot: true }]);
 
-        assert.deepEqual(server.lastRequest.body.participants, [
-            { id: 'bot-1', name: 'Bot', is_bot: true },
-        ]);
+        assert.deepEqual(server.lastRequest.body.participants, [{ id: 'bot-1', name: 'Bot', is_bot: true }]);
     });
 
     test('unknown keys in participant are dropped by normalization', async () => {
@@ -51,16 +53,11 @@ describe('Emby.addParticipantsToChat()', () => {
 
         await sdk.addParticipantsToChat('c1', [{ id: 'p1', name: 'A', bogus: 'drop', internal: 42 }]);
 
-        assert.deepEqual(server.lastRequest.body.participants, [
-            { id: 'p1', name: 'A', is_bot: false },
-        ]);
+        assert.deepEqual(server.lastRequest.body.participants, [{ id: 'p1', name: 'A', is_bot: false }]);
     });
 
     test('500 server error', async () => {
         server.respondWith(loadFixture('chats/add-participants/server-error'));
-        await assert.rejects(
-            sdk.addParticipantsToChat('c1', [{ id: 'p1', name: 'A' }]),
-            (err) => err.status === 500
-        );
+        await assert.rejects(sdk.addParticipantsToChat('c1', [{ id: 'p1', name: 'A' }]), (err) => err.status === 500);
     });
 });

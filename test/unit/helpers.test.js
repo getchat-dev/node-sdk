@@ -3,7 +3,6 @@ const assert = require('node:assert/strict');
 const _ = require('../../libs/helpers');
 
 describe('libs/helpers.js', () => {
-
     describe('isNoValue', () => {
         test('true for null and undefined', () => {
             assert.equal(_.isNoValue(null), true);
@@ -111,9 +110,18 @@ describe('libs/helpers.js', () => {
 
     describe('isFunction', () => {
         test('returns true for functions', () => {
-            assert.equal(_.isFunction(() => {}), true);
-            assert.equal(_.isFunction(function() {}), true);
-            assert.equal(_.isFunction(async () => {}), true);
+            assert.equal(
+                _.isFunction(() => {}),
+                true,
+            );
+            assert.equal(
+                _.isFunction(() => {}),
+                true,
+            );
+            assert.equal(
+                _.isFunction(async () => {}),
+                true,
+            );
             assert.equal(_.isFunction({}), false);
         });
     });

@@ -4,30 +4,18 @@
   },
   "edit_messages": {
     "type": "enum",
-    "values": [
-      "none",
-      "my",
-      "any"
-    ]
+    "values": ["none", "my", "any"]
   },
   "delete_messages": {
     "type": "enum",
-    "values": [
-      "none",
-      "my",
-      "any"
-    ]
+    "values": ["none", "my", "any"]
   },
   "react_messages": {
     "type": "boolean"
   },
   "pin_messages": {
     "type": "enum",
-    "values": [
-      "none",
-      "for_me",
-      "for_everyone"
-    ]
+    "values": ["none", "for_me", "for_everyone"]
   },
   "send_typing": {
     "type": "boolean"

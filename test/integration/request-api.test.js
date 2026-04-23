@@ -12,8 +12,12 @@ describe('requestApi (HTTP plumbing)', () => {
         server = await startMockServer();
         sdk = makeSdk(server.baseUrl);
     });
-    after(async () => { await server.close(); });
-    beforeEach(() => { server.reset(); });
+    after(async () => {
+        await server.close();
+    });
+    beforeEach(() => {
+        server.reset();
+    });
 
     test('GET builds querystring from flatten() and sends no body', async () => {
         server.respondWith({ status: 200, body: { ok: true } });
@@ -125,36 +129,27 @@ describe('requestApi (HTTP plumbing)', () => {
 
         await assert.rejects(
             sdk.requestApi('chats/unknown', {}, 'get'),
-            (err) => err instanceof Error && err.status === 404
+            (err) => err instanceof Error && err.status === 404,
         );
     });
 
     test('401 rejects with .status=401', async () => {
         server.respondWith({ status: 401, body: { message: 'unauthorized' } });
 
-        await assert.rejects(
-            sdk.requestApi('chats', {}, 'get'),
-            (err) => err.status === 401
-        );
+        await assert.rejects(sdk.requestApi('chats', {}, 'get'), (err) => err.status === 401);
     });
 
     test('500 rejects with .status=500', async () => {
         server.respondWith({ status: 500, body: { message: 'oops' } });
 
-        await assert.rejects(
-            sdk.requestApi('chats', {}, 'get'),
-            (err) => err.status === 500
-        );
+        await assert.rejects(sdk.requestApi('chats', {}, 'get'), (err) => err.status === 500);
     });
 
     test('application/json with malformed body rejects with SyntaxError', async () => {
         const broken = loadRawFixture('malformed-json.txt');
         server.respondWith({ status: 200, rawBody: broken, contentType: 'application/json' });
 
-        await assert.rejects(
-            sdk.requestApi('chats', {}, 'get'),
-            (err) => err instanceof SyntaxError
-        );
+        await assert.rejects(sdk.requestApi('chats', {}, 'get'), (err) => err instanceof SyntaxError);
     });
 
     test('text/plain response body returned as raw string (not parsed)', async () => {
@@ -170,10 +165,7 @@ describe('requestApi (HTTP plumbing)', () => {
     test('closed socket before response rejects with network error', async () => {
         server.respondWith({ closeSocket: true });
 
-        await assert.rejects(
-            sdk.requestApi('chats', {}, 'get'),
-            (err) => err instanceof Error && !err.status
-        );
+        await assert.rejects(sdk.requestApi('chats', {}, 'get'), (err) => err instanceof Error && !err.status);
     });
 
     test('baseUrl trailing slashes are stripped by constructor', () => {
@@ -186,7 +178,9 @@ describe('requestApi (HTTP plumbing)', () => {
     test('api_url passed explicitly overrides base_url for apiUrl', () => {
         const Emby = require('../../index.js');
         const s = new Emby({
-            id: 'i', secret: 's', api_token: 't',
+            id: 'i',
+            secret: 's',
+            api_token: 't',
             base_url: 'http://base.example/',
             api_url: 'http://api.example',
         });
@@ -202,9 +196,6 @@ describe('requestApi (HTTP plumbing)', () => {
 
     test('https protocol selects https.request (error path, no listener)', async () => {
         const s = makeSdk('https://127.0.0.1:1/does-not-exist');
-        await assert.rejects(
-            s.requestApi('chats', {}, 'get'),
-            (err) => err instanceof Error
-        );
+        await assert.rejects(s.requestApi('chats', {}, 'get'), (err) => err instanceof Error);
     });
 });

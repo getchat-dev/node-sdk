@@ -12,14 +12,11 @@ const CONFIG = Object.freeze({
     base_url: 'https://chat.example',
 });
 
-const CHARSET = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-
 // Deterministic Math.random that yields byte 0 → 'a' (first charset char).
 // strRandom(32) with all-zeros produces 32 x 'a'.
 const predictableNonce = (char, len = 32) => char.repeat(len);
 
-const expectedHmac = (secret, parts) =>
-    crypto.createHmac('sha256', secret).update(parts.join(',')).digest('hex');
+const expectedHmac = (secret, parts) => crypto.createHmac('sha256', secret).update(parts.join(',')).digest('hex');
 
 const parseQuery = (urlStr) => {
     const q = urlStr.split('?')[1] || '';
@@ -30,8 +27,15 @@ describe('Emby.url()', () => {
     let sdk;
     let restore;
 
-    beforeEach(() => { sdk = new Emby(CONFIG); });
-    afterEach(() => { if (restore) { restore(); restore = null; } });
+    beforeEach(() => {
+        sdk = new Emby(CONFIG);
+    });
+    afterEach(() => {
+        if (restore) {
+            restore();
+            restore = null;
+        }
+    });
 
     test('throws when clientId missing', () => {
         const s = new Emby({ ...CONFIG, id: undefined });
@@ -136,12 +140,7 @@ describe('Emby.url()', () => {
         assert.equal(qs['recipients[1][id]'], 'p2');
 
         // sig = clientId, nonce, user.id, p1.id, p1.name, p2.id, p2.name
-        const expected = expectedHmac(CONFIG.secret, [
-            CONFIG.id, nonce,
-            'u1',
-            'p1', 'Alice',
-            'p2', 'Bob',
-        ]);
+        const expected = expectedHmac(CONFIG.secret, [CONFIG.id, nonce, 'u1', 'p1', 'Alice', 'p2', 'Bob']);
         assert.equal(qs.signature, expected);
     });
 
@@ -163,9 +162,11 @@ describe('Emby.url()', () => {
 
         // rights is an OBJECT — packObjectForSignature emits sorted dot-notation
         const expected = expectedHmac(CONFIG.secret, [
-            CONFIG.id, nonce,
+            CONFIG.id,
+            nonce,
             'u1',
-            'rights.edit_messages=any', 'rights.send_messages=1',
+            'rights.edit_messages=any',
+            'rights.send_messages=1',
         ]);
         assert.equal(qs.signature, expected);
     });
@@ -230,8 +231,15 @@ describe('Emby.urlByChatId()', () => {
     let sdk;
     let restore;
 
-    beforeEach(() => { sdk = new Emby(CONFIG); });
-    afterEach(() => { if (restore) { restore(); restore = null; } });
+    beforeEach(() => {
+        sdk = new Emby(CONFIG);
+    });
+    afterEach(() => {
+        if (restore) {
+            restore();
+            restore = null;
+        }
+    });
 
     test('throws when clientId missing', () => {
         const s = new Emby({ ...CONFIG, id: undefined });
@@ -266,9 +274,10 @@ describe('Emby.urlByChatId()', () => {
         assert.equal(qs['chat[id]'], 'c1');
         assert.equal(qs['user[id]'], 'u1');
 
-        const expected = crypto.createHash('md5').update(
-            [CONFIG.secret, nonce, 'u1', 'User', 'c1'].join(',')
-        ).digest('hex');
+        const expected = crypto
+            .createHash('md5')
+            .update([CONFIG.secret, nonce, 'u1', 'User', 'c1'].join(','))
+            .digest('hex');
         assert.equal(qs.signature, expected);
         assert.equal(qs.signature.length, 32); // MD5 hex = 32 chars
     });
@@ -287,9 +296,10 @@ describe('Emby.urlByChatId()', () => {
         assert.equal(qs['user[rights][send_messages]'], '1');
 
         // but the signature is the same as without rights
-        const expectedWithoutRights = crypto.createHash('md5').update(
-            [CONFIG.secret, nonce, 'u1', 'c1'].join(',')
-        ).digest('hex');
+        const expectedWithoutRights = crypto
+            .createHash('md5')
+            .update([CONFIG.secret, nonce, 'u1', 'c1'].join(','))
+            .digest('hex');
         assert.equal(qs.signature, expectedWithoutRights);
     });
 
@@ -302,9 +312,10 @@ describe('Emby.urlByChatId()', () => {
         const qs = parseQuery(out);
         assert.equal(qs['chat[title]'], 'Room');
 
-        const expected = crypto.createHash('md5').update(
-            [CONFIG.secret, nonce, 'u1', 'c1', 'Room'].join(',')
-        ).digest('hex');
+        const expected = crypto
+            .createHash('md5')
+            .update([CONFIG.secret, nonce, 'u1', 'c1', 'Room'].join(','))
+            .digest('hex');
         assert.equal(qs.signature, expected);
     });
 
@@ -312,17 +323,16 @@ describe('Emby.urlByChatId()', () => {
         restore = stubMathRandom([0]);
         const nonce = predictableNonce('a', 32);
 
-        const out = sdk.urlByChatId('c1', { id: 'u1' }, [
-            { id: 'p1', name: 'Alice' },
-        ]);
+        const out = sdk.urlByChatId('c1', { id: 'u1' }, [{ id: 'p1', name: 'Alice' }]);
 
         const qs = parseQuery(out);
         assert.equal(qs['recipients[0][id]'], 'p1');
         assert.equal(qs['recipients[0][name]'], 'Alice');
 
-        const expected = crypto.createHash('md5').update(
-            [CONFIG.secret, nonce, 'u1', 'p1', 'Alice', 'c1'].join(',')
-        ).digest('hex');
+        const expected = crypto
+            .createHash('md5')
+            .update([CONFIG.secret, nonce, 'u1', 'p1', 'Alice', 'c1'].join(','))
+            .digest('hex');
         assert.equal(qs.signature, expected);
     });
 
@@ -335,9 +345,7 @@ describe('Emby.urlByChatId()', () => {
         const qs = parseQuery(out);
         assert.equal(qs.theme, 'dark');
 
-        const expected = crypto.createHash('md5').update(
-            [CONFIG.secret, nonce, 'u1', 'c1'].join(',')
-        ).digest('hex');
+        const expected = crypto.createHash('md5').update([CONFIG.secret, nonce, 'u1', 'c1'].join(',')).digest('hex');
         assert.equal(qs.signature, expected);
     });
 

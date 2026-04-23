@@ -1,4 +1,4 @@
-const http = require('http');
+const http = require('node:http');
 
 /**
  * Start an ephemeral-port HTTP mock server used to intercept SDK requests.
@@ -26,12 +26,18 @@ function startMockServer() {
     const server = http.createServer((req, res) => {
         let raw = '';
         req.setEncoding('utf8');
-        req.on('data', (chunk) => { raw += chunk; });
+        req.on('data', (chunk) => {
+            raw += chunk;
+        });
         req.on('end', async () => {
             const contentType = req.headers['content-type'] || '';
             let body = raw;
             if (raw && contentType.startsWith('application/json')) {
-                try { body = JSON.parse(raw); } catch (e) { /* leave raw */ }
+                try {
+                    body = JSON.parse(raw);
+                } catch {
+                    /* leave raw */
+                }
             }
             requests.push({
                 method: req.method,
@@ -49,7 +55,7 @@ function startMockServer() {
             }
 
             if (next.delayMs) {
-                await new Promise(r => setTimeout(r, next.delayMs));
+                await new Promise((r) => setTimeout(r, next.delayMs));
             }
 
             if (next.closeSocket) {
@@ -86,19 +92,31 @@ function startMockServer() {
                 server,
                 baseUrl,
                 /** Queue a response for the next request. Can be called multiple times. */
-                respondWith(spec) { responses.push(spec); return this; },
+                respondWith(spec) {
+                    responses.push(spec);
+                    return this;
+                },
                 /** Convenience: all pending requests captured so far. */
-                get requests() { return requests.slice(); },
+                get requests() {
+                    return requests.slice();
+                },
                 /** The last captured request (or undefined). */
-                get lastRequest() { return requests[requests.length - 1]; },
+                get lastRequest() {
+                    return requests[requests.length - 1];
+                },
                 /** Number of queued responses still unused. */
-                get pendingResponses() { return responses.length; },
+                get pendingResponses() {
+                    return responses.length;
+                },
                 /** Stop the server and release the port. */
                 close() {
                     return new Promise((res) => server.close(() => res()));
                 },
                 /** Reset captured requests and queued responses between subtests. */
-                reset() { requests.length = 0; responses.length = 0; },
+                reset() {
+                    requests.length = 0;
+                    responses.length = 0;
+                },
             });
         });
     });

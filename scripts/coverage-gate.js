@@ -13,12 +13,7 @@ const LCOV_PATH = process.argv[2] || path.join(__dirname, '..', 'coverage', 'lco
 const THRESHOLD = 100;
 
 // Files that must hit the threshold. Paths relative to repo root.
-const ALLOW_LIST = new Set([
-    'index.js',
-    'libs/helpers.js',
-    'libs/processUserRights.js',
-    'libs/signing.js',
-]);
+const ALLOW_LIST = new Set(['index.js', 'libs/helpers.js', 'libs/processUserRights.js', 'libs/signing.js']);
 
 function parseLcov(content) {
     const records = [];
@@ -65,12 +60,15 @@ function main() {
 
     for (const target of ALLOW_LIST) {
         const r = byFile.get(target);
-        if (!r) { missing.push(target); continue; }
+        if (!r) {
+            missing.push(target);
+            continue;
+        }
         const lines = pct(r.lh, r.lf);
         const funcs = pct(r.fh, r.fn);
         const branches = pct(r.bh, r.bf);
         console.log(
-            `${target.padEnd(36)}  lines=${lines.toFixed(2)}%  funcs=${funcs.toFixed(2)}%  branches=${branches.toFixed(2)}%`
+            `${target.padEnd(36)}  lines=${lines.toFixed(2)}%  funcs=${funcs.toFixed(2)}%  branches=${branches.toFixed(2)}%`,
         );
         if (lines < THRESHOLD || funcs < THRESHOLD || branches < THRESHOLD) {
             failures.push({ file: target, lines, funcs, branches });
@@ -84,7 +82,9 @@ function main() {
     if (failures.length) {
         console.error(`\ncoverage-gate: ${failures.length} file(s) below ${THRESHOLD}% threshold`);
         for (const f of failures) {
-            console.error(`  - ${f.file}: lines=${f.lines.toFixed(2)}% funcs=${f.funcs.toFixed(2)}% branches=${f.branches.toFixed(2)}%`);
+            console.error(
+                `  - ${f.file}: lines=${f.lines.toFixed(2)}% funcs=${f.funcs.toFixed(2)}% branches=${f.branches.toFixed(2)}%`,
+            );
         }
         process.exit(1);
     }

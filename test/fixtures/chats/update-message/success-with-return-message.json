@@ -1,17 +1,17 @@
 {
-    "status": 200,
-    "body": {
-        "status": true,
-        "is_updated": true,
-        "message": {
-            "id": "m1",
-            "user_id": "u1",
-            "text": "Updated text",
-            "created_at": 1740000000000,
-            "updated_at": 1740000100000,
-            "is_deleted": false,
-            "is_edited": true,
-            "versions": 2
-        }
+  "status": 200,
+  "body": {
+    "status": true,
+    "is_updated": true,
+    "message": {
+      "id": "m1",
+      "user_id": "u1",
+      "text": "Updated text",
+      "created_at": 1740000000000,
+      "updated_at": 1740000100000,
+      "is_deleted": false,
+      "is_edited": true,
+      "versions": 2
     }
+  }
 }

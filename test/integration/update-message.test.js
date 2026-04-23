@@ -11,8 +11,12 @@ describe('Emby.updateMessage()', () => {
         server = await startMockServer();
         sdk = makeSdk(server.baseUrl);
     });
-    after(async () => { await server.close(); });
-    beforeEach(() => { server.reset(); });
+    after(async () => {
+        await server.close();
+    });
+    beforeEach(() => {
+        server.reset();
+    });
 
     test('success with text → PUT /chats/c1/messages/m1', async () => {
         server.respondWith(loadFixture('chats/update-message/success'));
@@ -48,11 +52,7 @@ describe('Emby.updateMessage()', () => {
     test('replaceExtra=true sets update_extra_mode=replace', async () => {
         server.respondWith(loadFixture('chats/update-message/success'));
 
-        await sdk.updateMessage(
-            'c1', 'm1',
-            { text: 'x', extra: { tag: 'pinned' } },
-            { replaceExtra: true }
-        );
+        await sdk.updateMessage('c1', 'm1', { text: 'x', extra: { tag: 'pinned' } }, { replaceExtra: true });
 
         assert.equal(server.lastRequest.body.update_extra_mode, 'replace');
     });
@@ -60,11 +60,7 @@ describe('Emby.updateMessage()', () => {
     test('returnMessage=true sends return_message="1"', async () => {
         server.respondWith(loadFixture('chats/update-message/success-with-return-message'));
 
-        const r = await sdk.updateMessage(
-            'c1', 'm1',
-            { text: 'updated' },
-            { returnMessage: true }
-        );
+        const r = await sdk.updateMessage('c1', 'm1', { text: 'updated' }, { returnMessage: true });
 
         assert.equal(server.lastRequest.body.return_message, '1');
         assert.equal(r.message.id, 'm1');
@@ -96,17 +92,11 @@ describe('Emby.updateMessage()', () => {
 
     test('404 not found', async () => {
         server.respondWith(loadFixture('chats/update-message/not-found'));
-        await assert.rejects(
-            sdk.updateMessage('c1', 'missing', { text: 'x' }),
-            (err) => err.status === 404
-        );
+        await assert.rejects(sdk.updateMessage('c1', 'missing', { text: 'x' }), (err) => err.status === 404);
     });
 
     test('500 server error', async () => {
         server.respondWith(loadFixture('chats/update-message/server-error'));
-        await assert.rejects(
-            sdk.updateMessage('c1', 'm1', { text: 'x' }),
-            (err) => err.status === 500
-        );
+        await assert.rejects(sdk.updateMessage('c1', 'm1', { text: 'x' }), (err) => err.status === 500);
     });
 });

@@ -11,8 +11,12 @@ describe('Emby.getMessagesFromChat()', () => {
         server = await startMockServer();
         sdk = makeSdk(server.baseUrl);
     });
-    after(async () => { await server.close(); });
-    beforeEach(() => { server.reset(); });
+    after(async () => {
+        await server.close();
+    });
+    beforeEach(() => {
+        server.reset();
+    });
 
     test('success with default pagination', async () => {
         server.respondWith(loadFixture('chats/messages-list/success'));

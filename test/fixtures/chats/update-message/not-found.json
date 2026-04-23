@@ -1,4 +1,4 @@
 {
-    "status": 404,
-    "body": { "status": false, "message": "Message not found" }
+  "status": 404,
+  "body": { "status": false, "message": "Message not found" }
 }

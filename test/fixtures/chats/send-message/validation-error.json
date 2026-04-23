@@ -1,10 +1,10 @@
 {
-    "status": 422,
-    "body": {
-        "status": false,
-        "message": "Validation failed",
-        "errors": {
-            "messages.0.text": ["The text field is required."]
-        }
+  "status": 422,
+  "body": {
+    "status": false,
+    "message": "Validation failed",
+    "errors": {
+      "messages.0.text": ["The text field is required."]
     }
+  }
 }

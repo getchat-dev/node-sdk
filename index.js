@@ -1,8 +1,8 @@
-const crypto = require('crypto');
-const https = require('https');
-const http = require('http');
-const url = require('url');
-const querystring = require('querystring');
+const crypto = require('node:crypto');
+const https = require('node:https');
+const http = require('node:http');
+const url = require('node:url');
+const querystring = require('node:querystring');
 const processUserRights = require('./libs/processUserRights');
 const _ = require('./libs/helpers');
 const {
@@ -18,7 +18,6 @@ const {
  * @typedef {'private' | 'group' | 'supergroup' | 'channel'} ChatType
  */
 class Emby {
-
     constructor(config = {}) {
         this.clientId = config.id;
         this.clientSecret = config.secret;
@@ -26,7 +25,7 @@ class Emby {
         this.baseUrl = config.base_url;
         this.apiUrl = config.api_url || this.baseUrl;
 
-        if(_.isString(this.baseUrl)) {
+        if (_.isString(this.baseUrl)) {
             // remove trailing slash
             this.baseUrl = this.baseUrl.replace(/\/+$/g, '');
         }
@@ -41,14 +40,13 @@ class Emby {
      * @param {string} [version='v1'] - The API version to use. Defaults to 'v1'.
      * @returns {Promise<Object>} A promise that resolves to the API response.
      */
-    requestApi(method, params = {}, type = 'get', version = 'v1')
-    {
+    requestApi(method, params = {}, type = 'get', version = 'v1') {
         let sParams = '';
 
         let _url = `${this.apiUrl}/api/${version}/${method}`;
 
-        if(!(type === 'post' || type === 'put')) {
-            _url+= '?'+querystring.stringify(flatten(params))
+        if (!(type === 'post' || type === 'put')) {
+            _url += `?${querystring.stringify(flatten(params))}`;
         }
 
         _url = encodeURI(_url);
@@ -57,49 +55,50 @@ class Emby {
 
         const options = {
             method: type.toUpperCase(),
-            ...(_.onlyProps(urlParts, ['hostname', 'port', 'path'])),
+            ..._.onlyProps(urlParts, ['hostname', 'port', 'path']),
             headers: {
-                'Accept': 'application/json',
+                Accept: 'application/json',
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${this.apiToken}`
-            }
-        }
+                Authorization: `Bearer ${this.apiToken}`,
+            },
+        };
 
-        if(type === 'post' || type === 'put') {
+        if (type === 'post' || type === 'put') {
             sParams = JSON.stringify(params);
         }
 
         return new Promise((resolve, reject) => {
-            const request = (urlParts.protocol === 'https:' ? https : http).request(options, (res) => {
+            const request = (urlParts.protocol === 'https:' ? https : http)
+                .request(options, (res) => {
+                    let body = '';
+                    res.setEncoding('utf8');
+                    res.on('data', (chunk) => {
+                        body += chunk;
+                    });
+                    res.on('end', () => {
+                        const contentType = res.headers['content-type'];
+                        if (contentType?.startsWith('application/json')) {
+                            try {
+                                body = JSON.parse(body);
+                            } catch (e) {
+                                reject(e);
+                            }
+                        }
 
-                let body = '';
-                res.setEncoding('utf8');
-                res.on('data', (chunk) => { body += chunk; });
-                res.on('end', () => {
-                    const contentType = res.headers['content-type'];
-                    if (contentType && contentType.startsWith('application/json')) {
-                        try {
-                            body = JSON.parse(body);
-                        } catch (e) {
+                        if (res.statusCode >= 200 && res.statusCode < 400) {
+                            resolve(body);
+                        } else {
+                            const e = new Error(body);
+                            e.status = res.statusCode;
                             reject(e);
                         }
-                    }
-
-                    if (res.statusCode >= 200 && res.statusCode < 400) {
-                        resolve(body);
-                    }
-                    else {
-                        const e = new Error(body);
-                        e.status = res.statusCode;
-                        reject(e);
-                    }
+                    });
+                })
+                .on('error', (e) => {
+                    reject(e);
                 });
-            })
-            .on('error', (e) => {
-                reject(e);
-            });
 
-            if(sParams.length) {
+            if (sParams.length) {
                 request.write(sParams);
             }
 
@@ -144,31 +143,28 @@ class Emby {
      * @param {boolean} [options.extra.skin_options.hide_deleted_message=false] - If true, deleted messages won't be displayed.
      * @param {number} [options.extra.skin_options.message_max_length=0] - Set limit for input message length (0 means no limit).
      * @param {("en"|"pt"|"ru")} [options.extra.skin_options.lang="en"] - Set language for skin.
-     * 
+     *
      * @returns {string} The generated chat URL.
      */
-    url({chat = null, user = {}, participants = [], extra = {} })
-    {
-        if(! this.clientId) {
+    url({ chat = null, user = {}, participants = [], extra = {} }) {
+        if (!this.clientId) {
             throw new Error('To generate chat URL client id is required, please set it in the constructor config');
         }
-        if(! this.clientSecret) {
+        if (!this.clientSecret) {
             throw new Error('To generate chat URL client secret is required, please set it in the constructor config');
         }
 
         // check chat parameter
-        if(_.isPlainObject(chat)) {
+        if (_.isPlainObject(chat)) {
             chat = normalizeChat(chat);
-        }
-        else if(_.isString(chat)) {
-            chat = {id: chat};
-        }
-        else {
+        } else if (_.isString(chat)) {
+            chat = { id: chat };
+        } else {
             chat = null;
         }
 
         // check user parameter
-        if(_.isPlainObject(user)) {
+        if (_.isPlainObject(user)) {
             user = normalizeData(user, {
                 id: null,
                 name: null,
@@ -176,62 +172,60 @@ class Emby {
                 picture: null,
                 rights: {
                     process: (data) => {
-                        if (_.isFilledPlainObject(data))
-                        {
+                        if (_.isFilledPlainObject(data)) {
                             const userRights = processUserRights(data);
-                            if(userRights && Object.keys(userRights).length) {
+                            if (userRights && Object.keys(userRights).length) {
                                 return userRights;
                             }
                         }
 
                         return undefined;
-                    }
+                    },
                 },
                 session: {
                     process: (data) => {
                         if (!user.id) {
-                            return _.isString(data) ? data : strRandom(40)
+                            return _.isString(data) ? data : strRandom(40);
                         }
 
                         return undefined;
-                    }
-                }
+                    },
+                },
             });
-        }
-        else {
+        } else {
             throw new Error('user parameter have to be a plain object');
         }
 
         const nonce = strRandom(32);
 
-        let signatureParams = [
-            this.clientId,
-            nonce
-        ];
+        let signatureParams = [this.clientId, nonce];
 
         const queryParams = {
-            'nonce': nonce,
-            'user': user,
-            'recipients': []
+            nonce: nonce,
+            user: user,
+            recipients: [],
         };
 
         signatureParams = addToSignature(signatureParams, user, ['id', 'name', 'email', 'link', 'picture', 'rights']);
- 
-        participants.forEach(participant => {
-            participant = normalizeData(participant, {id: null, name: null, is_bot: {default: false}});
 
-            queryParams['recipients'].push(participant)
+        participants.forEach((participant) => {
+            participant = normalizeData(participant, { id: null, name: null, is_bot: { default: false } });
+
+            queryParams.recipients.push(participant);
             signatureParams = addToSignature(signatureParams, participant, ['id', 'name']);
         });
 
         if (chat) {
-            signatureParams = addToSignature(signatureParams, chat, ['id', 'title', 'socket_port', 'create'])
-            queryParams['chat'] = chat;
+            signatureParams = addToSignature(signatureParams, chat, ['id', 'title', 'socket_port', 'create']);
+            queryParams.chat = chat;
         }
 
-        queryParams['signature'] = crypto.createHmac('sha256', this.clientSecret).update(signatureParams.join(',')).digest('hex');
+        queryParams.signature = crypto
+            .createHmac('sha256', this.clientSecret)
+            .update(signatureParams.join(','))
+            .digest('hex');
 
-        Object.keys(extra).forEach(key => {
+        Object.keys(extra).forEach((key) => {
             queryParams[key] = extra[key];
         });
 
@@ -276,35 +270,32 @@ class Emby {
      * @param {boolean} [extra.skin_options.hide_deleted_message=false] - If true, deleted messages won't be displayed.
      * @param {number} [extra.skin_options.message_max_length=0] - Set limit for input message length (0 means no limit).
      * @param {("en"|"pt"|"ru")} [extra.skin_options.lang="en"] - Set language for skin.
-     * 
+     *
      * @returns {string} The generated chat URL.
      */
-    urlByChatId(chat = {}, user = {}, participants = [], extra = {})
-    {
-        if(! this.clientId) {
+    urlByChatId(chat = {}, user = {}, participants = [], extra = {}) {
+        if (!this.clientId) {
             throw new Error('To generate chat URL client id is required, please set it in the constructor config');
         }
-        if(! this.clientSecret) {
+        if (!this.clientSecret) {
             throw new Error('To generate chat URL client secret is required, please set it in the constructor config');
         }
 
         // check chat parameter
-        if(_.isPlainObject(chat)) {
+        if (_.isPlainObject(chat)) {
             chat = normalizeChat(chat);
-        }
-        else if(_.isString(chat)) {
-            chat = {id: chat};
-        }
-        else {
+        } else if (_.isString(chat)) {
+            chat = { id: chat };
+        } else {
             throw new Error('first parameter(chat) have to be a plain object or string');
         }
 
-        if(!_.isString(chat.id)) {
-            throw new Error('chat id isn\'t passed');
+        if (!_.isString(chat.id)) {
+            throw new Error("chat id isn't passed");
         }
 
         // check user parameter
-        if(_.isPlainObject(user)) {
+        if (_.isPlainObject(user)) {
             user = normalizeData(user, {
                 id: null,
                 name: null,
@@ -312,60 +303,55 @@ class Emby {
                 picture: null,
                 rights: {
                     process: (data) => {
-                        if (_.isFilledPlainObject(data))
-                        {
+                        if (_.isFilledPlainObject(data)) {
                             const userRights = processUserRights(data);
-                            if(userRights && Object.keys(userRights).length) {
+                            if (userRights && Object.keys(userRights).length) {
                                 return userRights;
                             }
                         }
 
                         return undefined;
-                    }
+                    },
                 },
                 session: {
                     process: (data) => {
                         if (!user.id) {
-                            return _.isString(data) ? data : strRandom(40)
+                            return _.isString(data) ? data : strRandom(40);
                         }
 
                         return undefined;
-                    }
-                }
+                    },
+                },
             });
-        }
-        else {
+        } else {
             throw new Error('second parameter(user) have to be a plain object');
         }
 
         const nonce = strRandom(32);
 
-        let signatureParams = [
-            this.clientSecret,
-            nonce
-        ];
+        let signatureParams = [this.clientSecret, nonce];
 
         const queryParams = {
-            'nonce': nonce,
-            'chat': chat,
-            'user': user,
-            'recipients': []
+            nonce: nonce,
+            chat: chat,
+            user: user,
+            recipients: [],
         };
 
         signatureParams = addToSignature(signatureParams, user, ['id', 'name', 'email', 'link', 'picture']);
- 
-        participants.forEach(participant => {
-            participant = normalizeData(participant, {id: null, name: null, is_bot: {default: false}});
 
-            queryParams['recipients'].push(participant)
+        participants.forEach((participant) => {
+            participant = normalizeData(participant, { id: null, name: null, is_bot: { default: false } });
+
+            queryParams.recipients.push(participant);
             signatureParams = addToSignature(signatureParams, participant, ['id', 'name']);
         });
 
-        signatureParams = addToSignature(signatureParams, chat, ['id', 'title', 'socket_port', 'create'])
+        signatureParams = addToSignature(signatureParams, chat, ['id', 'title', 'socket_port', 'create']);
 
-        queryParams['signature'] = crypto.createHash('md5').update(signatureParams.join(',')).digest('hex');
+        queryParams.signature = crypto.createHash('md5').update(signatureParams.join(',')).digest('hex');
 
-        Object.keys(extra).forEach(key => {
+        Object.keys(extra).forEach((key) => {
             queryParams[key] = extra[key];
         });
 
@@ -378,13 +364,12 @@ class Emby {
      * Retrieve chat details by chat ID.
      *
      * @param {string} chatId - The unique identifier for the chat. This parameter is required.
-     * 
+     *
      * @returns {Object[]} An Chat object.
      */
-    getChatInfo(id)
-    {
-        if(!_.isString(id)) {
-            throw new Error('chat id isn\'t passed');
+    getChatInfo(id) {
+        if (!_.isString(id)) {
+            throw new Error("chat id isn't passed");
         }
 
         return this.requestApi(`chats/${id}`);
@@ -397,50 +382,49 @@ class Emby {
      * @param {Object} queryParams - The query parameters to filter messages. This parameter is required.
      * @param {number} [page=1] - The page number for pagination. Defaults to 1.
      * @param {number} [limit=1] - The number of messages to retrieve per page. Defaults to 1.
-     * 
+     *
      * @returns {Object[]} An array of messages from the chat.
      */
-    getMessagesFromChat(chatId, queryParams, page = 1, limit = 1)
-    {
+    getMessagesFromChat(chatId, queryParams, page = 1, limit = 1) {
         limit = Math.min(parseInt(limit, 10), 1000);
         page = Math.max(parseInt(page, 10), 1);
 
         let params = {
-            'page': page,
-            'limit': limit
+            page: page,
+            limit: limit,
         };
 
-        if(_.isFilledPlainObject(queryParams)) {
+        if (_.isFilledPlainObject(queryParams)) {
             const _params = {};
-            if(_.isFilledPlainObject(queryParams.extra)) {
+            if (_.isFilledPlainObject(queryParams.extra)) {
                 const extraParams = {};
 
-                Object.keys(queryParams.extra).forEach(key => {
+                Object.keys(queryParams.extra).forEach((key) => {
                     const value = queryParams.extra[key];
 
-                    if(_.isScalar(value)) {
+                    if (_.isScalar(value)) {
                         extraParams[key] = _.isBoolean(value, true) ? _.isTRUE(value) : value;
                     }
                 });
 
-                if(Object.keys(extraParams).length) {
+                if (Object.keys(extraParams).length) {
                     _params.extra = extraParams;
                 }
             }
 
-            if(_.isBoolean(queryParams.isDeleted, true)) {
+            if (_.isBoolean(queryParams.isDeleted, true)) {
                 _params.isDeleted = Number(_.isTRUE(queryParams.isDeleted));
             }
 
-            if(_.isBoolean(queryParams.isEdited, true)) {
+            if (_.isBoolean(queryParams.isEdited, true)) {
                 _params.isEdited = Number(_.isTRUE(queryParams.isEdited));
             }
 
-            if(_.isBoolean(queryParams.withUsers, true)) {
+            if (_.isBoolean(queryParams.withUsers, true)) {
                 _params.withUsers = Number(_.isTRUE(queryParams.withUsers));
             }
 
-            if(Object.keys(_params).length) {
+            if (Object.keys(_params).length) {
                 params = Object.assign({}, params, _params);
             }
         }
@@ -478,14 +462,13 @@ class Emby {
      * @param {string} buttons[].action - The action associated with the button. This parameter is required.
      * @param {string} buttons[].type - The type of the button (local or remote). This parameter is required.
      * @param {string} [buttons[].style] - The style of the button.
-     * 
+     *
      * @returns {Promise<Object>} A promise that resolves to the response of the send message action.
      */
-    sendMessage(chat, user, participants, message, extra = {}, buttons = [])
-    {
+    sendMessage(chat, user, participants, message, extra = {}, buttons = []) {
         const queryParams = {
-            'user': user,
-            'participants': participants
+            user: user,
+            participants: participants,
         };
 
         const messageData = {};
@@ -499,29 +482,26 @@ class Emby {
             if (!_.isNoValue(message.recipient_id)) {
                 messageData.recipient_id = message.recipient_id;
             }
-        }
-        else if (_.isString(message)) {
+        } else if (_.isString(message)) {
             messageData.text = message;
         }
 
-        if(! (_.isString(messageData.text) && messageData.text.length)) {
+        if (!(_.isString(messageData.text) && messageData.text.length)) {
             throw new Error('message text is required');
         }
 
         // check chat parameter
-        if(_.isPlainObject(chat)) {
+        if (_.isPlainObject(chat)) {
             chat = normalizeChat(chat);
-        }
-        else if(_.isString(chat)) {
-            chat = {id: chat};
-        }
-        else {
+        } else if (_.isString(chat)) {
+            chat = { id: chat };
+        } else {
             throw new Error('first parameter(chat) have to be a plain object or string');
         }
 
-        if(!_.isString(chat.id)) {
-            if(! _.isNumeric(chat.id)) {
-                throw new Error('chat id isn\'t passed');
+        if (!_.isString(chat.id)) {
+            if (!_.isNumeric(chat.id)) {
+                throw new Error("chat id isn't passed");
             }
 
             chat.id = chat.id.toString();
@@ -533,13 +513,11 @@ class Emby {
             queryParams.chat = chat;
         }
 
-        if (_.isFilledPlainObject(extra))
-        {
+        if (_.isFilledPlainObject(extra)) {
             messageData.extra = extra;
         }
 
-        if (_.isFilledArray(buttons))
-        {
+        if (_.isFilledArray(buttons)) {
             messageData.buttons = buttons;
         }
 
@@ -572,34 +550,38 @@ class Emby {
      * @param {Object} [options={}] - Additional options for the update operation.
      * @param {boolean} [options.replaceExtra=false] - Flag to replace the existing extra options with the new ones.
      * @param {boolean} [options.returnMessage=false] - Flag to return the updated message.
-     * 
+     *
      * @returns {Promise<Object>} A promise that resolves to the response of the update message action.
      */
-    updateMessage(chatId, messageId, {text, isDeleted = false, extra = {}, buttons = []}, {replaceExtra = false, returnMessage = false} = {})
-    {
-        const params = {message: {}};
+    updateMessage(
+        chatId,
+        messageId,
+        { text, isDeleted = false, extra = {}, buttons = [] },
+        { replaceExtra = false, returnMessage = false } = {},
+    ) {
+        const params = { message: {} };
 
-        if(_.isString(text) && text.length) {
+        if (_.isString(text) && text.length) {
             params.message.text = text;
         }
 
-        if(_.isTRUE(isDeleted)) {
-            params.message.is_deleted = "1";
+        if (_.isTRUE(isDeleted)) {
+            params.message.is_deleted = '1';
             delete params.message.text;
         }
 
-        if(_.isFilledPlainObject(extra)) {
+        if (_.isFilledPlainObject(extra)) {
             params.message.extra = extra;
         }
 
-        if(_.isFilledArray(buttons)) {
+        if (_.isFilledArray(buttons)) {
             params.message.buttons = buttons;
         }
 
-        params.update_extra_mode = (replaceExtra === true ? 'replace' : 'merge');
+        params.update_extra_mode = replaceExtra === true ? 'replace' : 'merge';
 
-        if(returnMessage === true) {
-            params.return_message = '1'
+        if (returnMessage === true) {
+            params.return_message = '1';
         }
 
         return this.requestApi(`chats/${chatId}/messages/${messageId}`, params, 'put');
@@ -610,13 +592,12 @@ class Emby {
      *
      * @param {string} chatId - The unique identifier for the chat. This parameter is required.
      * @param {string} messageId - The unique identifier for the message. This parameter is required.
-     * 
+     *
      * @returns {Promise<Object>} A promise that resolves to the response of the update message action.
      */
-    deleteMessage(chatId, messageId)
-    {
+    deleteMessage(chatId, messageId) {
         const params = { message: {} };
-        params.message.is_deleted = "1";
+        params.message.is_deleted = '1';
 
         return this.requestApi(`chats/${chatId}/messages/${messageId}`, params, 'put');
     }
@@ -626,13 +607,12 @@ class Emby {
      *
      * @param {string} chatId - The unique identifier for the chat. This parameter is required.
      * @param {string} userId - The unique identifier for the user. This parameter is required.
-     * 
+     *
      * @returns {Promise<void>} A promise that resolves when the typing indicator has been sent.
      */
-    sendTyping(chatId, userId)
-    {
+    sendTyping(chatId, userId) {
         const queryParams = {
-            'user': userId,
+            user: userId,
         };
 
         return this.requestApi(`chats/${chatId}/typing`, queryParams, 'put');
@@ -649,17 +629,16 @@ class Emby {
      * @param {string} [participants[].picture] - The name of the recipient.
      * @param {string} [participants[].link] - The name of the recipient.
      * @param {boolean} [participants[].is_bot=false] - Indicates if the recipient is a bot.
-     * 
+     *
      * @returns {Promise<Object>} A promise that resolves to the response of the send message action.
      */
-    addParticipantsToChat(chatId, participants = [])
-    {
-        if(! _.isFilledArray(participants)) {
+    addParticipantsToChat(chatId, participants = []) {
+        if (!_.isFilledArray(participants)) {
             throw new Error('participants have to be an array of participant objects');
         }
 
         const queryParams = {
-            participants: participants.map(normalizeParticipant)
+            participants: participants.map(normalizeParticipant),
         };
 
         return this.requestApi(`chats/${chatId}/participants`, queryParams, 'post');

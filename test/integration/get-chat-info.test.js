@@ -11,8 +11,12 @@ describe('Emby.getChatInfo()', () => {
         server = await startMockServer();
         sdk = makeSdk(server.baseUrl);
     });
-    after(async () => { await server.close(); });
-    beforeEach(() => { server.reset(); });
+    after(async () => {
+        await server.close();
+    });
+    beforeEach(() => {
+        server.reset();
+    });
 
     test('throws when id is not a string', () => {
         assert.throws(() => sdk.getChatInfo(), /chat id isn't passed/);

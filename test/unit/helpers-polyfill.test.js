@@ -1,6 +1,5 @@
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
-const path = require('node:path');
 
 /**
  * helpers.js has an isArray polyfill that activates only when `Array.isArray`

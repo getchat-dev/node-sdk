@@ -11,8 +11,12 @@ describe('Emby.sendTyping()', () => {
         server = await startMockServer();
         sdk = makeSdk(server.baseUrl);
     });
-    after(async () => { await server.close(); });
-    beforeEach(() => { server.reset(); });
+    after(async () => {
+        await server.close();
+    });
+    beforeEach(() => {
+        server.reset();
+    });
 
     test('PUT /chats/c1/typing with { user: userId }', async () => {
         server.respondWith(loadFixture('chats/send-typing/success'));
@@ -27,9 +31,6 @@ describe('Emby.sendTyping()', () => {
 
     test('500 server error', async () => {
         server.respondWith(loadFixture('chats/send-typing/server-error'));
-        await assert.rejects(
-            sdk.sendTyping('c1', 'u-author'),
-            (err) => err.status === 500
-        );
+        await assert.rejects(sdk.sendTyping('c1', 'u-author'), (err) => err.status === 500);
     });
 });

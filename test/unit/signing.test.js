@@ -12,7 +12,6 @@ const {
 const { stubMathRandom } = require('../helpers/seededRandom');
 
 describe('libs/signing.js', () => {
-
     describe('strRandom', () => {
         test('default length is 10, only alphanumeric', () => {
             const s = strRandom();
@@ -28,7 +27,9 @@ describe('libs/signing.js', () => {
             const restore = stubMathRandom([0, 0, 0]);
             try {
                 assert.equal(strRandom(3), 'aaa');
-            } finally { restore(); }
+            } finally {
+                restore();
+            }
         });
     });
 
@@ -37,16 +38,10 @@ describe('libs/signing.js', () => {
             assert.deepEqual(flatten({ a: 1, b: 'x' }), { a: 1, b: 'x' });
         });
         test('nested object uses bracket notation', () => {
-            assert.deepEqual(
-                flatten({ user: { id: 'u1', name: 'N' } }),
-                { 'user[id]': 'u1', 'user[name]': 'N' }
-            );
+            assert.deepEqual(flatten({ user: { id: 'u1', name: 'N' } }), { 'user[id]': 'u1', 'user[name]': 'N' });
         });
         test('two-level nesting', () => {
-            assert.deepEqual(
-                flatten({ a: { b: { c: 7 } } }),
-                { 'a[b][c]': 7 }
-            );
+            assert.deepEqual(flatten({ a: { b: { c: 7 } } }), { 'a[b][c]': 7 });
         });
         test('empty object yields empty output', () => {
             assert.deepEqual(flatten({}), {});
@@ -55,10 +50,7 @@ describe('libs/signing.js', () => {
             assert.deepEqual(flatten({ a: {}, b: 1 }), { b: 1 });
         });
         test('arrays are treated as objects with numeric keys', () => {
-            assert.deepEqual(
-                flatten({ tags: ['red', 'blue'] }),
-                { 'tags[0]': 'red', 'tags[1]': 'blue' }
-            );
+            assert.deepEqual(flatten({ tags: ['red', 'blue'] }), { 'tags[0]': 'red', 'tags[1]': 'blue' });
         });
         test('null nested value throws (SDK paths never feed null here — normalizeData strips it first)', () => {
             assert.throws(() => flatten({ x: null }), TypeError);
@@ -117,8 +109,22 @@ describe('libs/signing.js', () => {
             assert.deepEqual(out, { id: 'p1', name: 'P', is_bot: false });
         });
         test('normalizeParticipant keeps optional fields when provided', () => {
-            const out = normalizeParticipant({ id: 'p1', name: 'P', email: 'e@x', picture: 'https://p', link: 'https://l', is_bot: true });
-            assert.deepEqual(out, { id: 'p1', name: 'P', email: 'e@x', picture: 'https://p', link: 'https://l', is_bot: true });
+            const out = normalizeParticipant({
+                id: 'p1',
+                name: 'P',
+                email: 'e@x',
+                picture: 'https://p',
+                link: 'https://l',
+                is_bot: true,
+            });
+            assert.deepEqual(out, {
+                id: 'p1',
+                name: 'P',
+                email: 'e@x',
+                picture: 'https://p',
+                link: 'https://l',
+                is_bot: true,
+            });
         });
     });
 

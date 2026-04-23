@@ -1,36 +1,36 @@
 {
-    "status": 200,
-    "body": {
-        "status": true,
-        "messages": {
-            "m1": {
-                "id": "m1",
-                "user_id": "u-owner",
-                "text": "Hello world",
-                "created_at": 1740000000000,
-                "updated_at": null,
-                "is_deleted": false,
-                "is_edited": false,
-                "versions": 1
-            },
-            "m2": {
-                "id": "m2",
-                "user_id": "u-guest",
-                "text": "Hi there",
-                "created_at": 1740000010000,
-                "is_deleted": false,
-                "is_edited": true,
-                "versions": 2
-            }
-        },
-        "messages_sort": ["m1", "m2"],
-        "meta": { "total": 2, "output": 2 },
-        "pagination": {
-            "items_per_page": 50,
-            "current": 1,
-            "total": 1,
-            "next_page_url": null,
-            "prev_page_url": null
-        }
+  "status": 200,
+  "body": {
+    "status": true,
+    "messages": {
+      "m1": {
+        "id": "m1",
+        "user_id": "u-owner",
+        "text": "Hello world",
+        "created_at": 1740000000000,
+        "updated_at": null,
+        "is_deleted": false,
+        "is_edited": false,
+        "versions": 1
+      },
+      "m2": {
+        "id": "m2",
+        "user_id": "u-guest",
+        "text": "Hi there",
+        "created_at": 1740000010000,
+        "is_deleted": false,
+        "is_edited": true,
+        "versions": 2
+      }
+    },
+    "messages_sort": ["m1", "m2"],
+    "meta": { "total": 2, "output": 2 },
+    "pagination": {
+      "items_per_page": 50,
+      "current": 1,
+      "total": 1,
+      "next_page_url": null,
+      "prev_page_url": null
     }
+  }
 }
