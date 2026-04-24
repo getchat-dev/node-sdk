@@ -39,13 +39,13 @@ describe('Emby.updateMessage()', () => {
         assert.equal(body.update_extra_mode, 'merge');
     });
 
-    test('isDeleted=true sets is_deleted="1" and drops text', async () => {
+    test('isDeleted=true sets is_deleted=true (boolean, spec) and drops text', async () => {
         server.respondWith(loadFixture('chats/update-message/success-deleted'));
 
         await sdk.updateMessage('c1', 'm1', { text: 'ignored', isDeleted: true });
 
         const message = (server.lastRequest!.body as JsonBody).message as Record<string, unknown>;
-        assert.equal(message.is_deleted, '1');
+        assert.equal(message.is_deleted, true);
         assert.equal(message.text, undefined);
     });
 
@@ -78,7 +78,7 @@ describe('Emby.updateMessage()', () => {
             { returnMessage: true },
         );
 
-        assert.equal((server.lastRequest!.body as JsonBody).return_message, '1');
+        assert.equal((server.lastRequest!.body as JsonBody).return_message, true);
         assert.equal(r.message.id, 'm1');
     });
 

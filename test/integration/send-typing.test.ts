@@ -22,15 +22,17 @@ describe('Emby.sendTyping()', () => {
         server.reset();
     });
 
-    test('PUT /chats/c1/typing with { user: userId }', async () => {
+    test('PUT /chats/c1/typing/u-author (no body) — spec format, BREAKING change in 1.13', async () => {
         server.respondWith(loadFixture('chats/send-typing/success'));
 
         await sdk.sendTyping('c1', 'u-author');
 
         const req = server.lastRequest!;
         assert.equal(req.method, 'PUT');
-        assert.equal(req.path, '/api/v1/chats/c1/typing');
-        assert.deepEqual(req.body, { user: 'u-author' });
+        assert.equal(req.path, '/api/v1/chats/c1/typing/u-author');
+        // chatSendTyping has no requestBody in the spec; requestApi sends "{}" for PUT
+        // when no body is supplied — this is harmless and matches existing behavior.
+        assert.equal(req.rawBody, '{}');
     });
 
     test('500 server error', async () => {

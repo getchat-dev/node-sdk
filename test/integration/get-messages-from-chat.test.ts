@@ -41,10 +41,11 @@ describe('Emby.getMessagesFromChat()', () => {
         assert.deepEqual(r.messages, {});
     });
 
-    test('with_users flag when withUsers=true', async () => {
+    test('with_users flag when withUsers=true (legacy field name accepted, wire is spec)', async () => {
         server.respondWith(loadFixture('chats/messages-list/with-users'));
         await sdk.getMessagesFromChat('c1', { withUsers: true } as GetChatMessagesQuery);
-        assert.match(server.lastRequest!.path!, /withUsers=1/);
+        // Wire format is spec-correct snake_case (was buggy `withUsers=1` until 1.13)
+        assert.match(server.lastRequest!.path!, /with_users=1/);
     });
 
     test('boolean coercion: isDeleted=true → 1, isEdited="no" → 0', async () => {
@@ -54,14 +55,14 @@ describe('Emby.getMessagesFromChat()', () => {
         assert.match(server.lastRequest!.path!, /isEdited=0/);
     });
 
-    test('boolean coercion: isDeleted="yes" → 1, withUsers=false → 0', async () => {
+    test('boolean coercion: isDeleted="yes" → 1, withUsers=false → 0 (wire snake_case)', async () => {
         server.respondWith(loadFixture('chats/messages-list/success'));
         await sdk.getMessagesFromChat('c1', {
             isDeleted: 'yes' as unknown as boolean,
             withUsers: false,
         } as GetChatMessagesQuery);
         assert.match(server.lastRequest!.path!, /isDeleted=1/);
-        assert.match(server.lastRequest!.path!, /withUsers=0/);
+        assert.match(server.lastRequest!.path!, /with_users=0/);
     });
 
     test('non-boolean filter values are ignored', async () => {

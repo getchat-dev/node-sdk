@@ -1,0 +1,1555 @@
+openapi: 3.1.0
+info:
+  title: GetChat API
+  version: 1.0.0
+  description: API documentation for GetChat application
+
+servers:
+  - url: https://api.getchat.io
+    description: Production server
+
+paths:
+  /chats:
+    get:
+      summary: List chats
+      operationId: chat.list
+      tags:
+        - Chats
+      parameters:
+        - $ref: '#/components/parameters/limitParam'
+        - $ref: '#/components/parameters/pageParam'
+        - name: type
+          in: query
+          description: Filter by chat type
+          required: false
+          schema:
+            type: string
+            enum: [private, group, supergroup, channel]
+        - name: owner
+          in: query
+          description: Filter by owner ID
+          required: false
+          schema:
+            type: string
+            maxLength: 255
+        - name: created_from
+          in: query
+          description: Filter chats created from this date
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: created_to
+          in: query
+          description: Filter chats created before this date
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: last_message_from
+          in: query
+          description: Filter chats with messages from this date
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: last_message_to
+          in: query
+          description: Filter chats with messages before this date
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: metadata
+          in: query
+          description: Filter by metadata key-value pairs
+          required: false
+          style: deepObject
+          schema:
+            type: object
+            additionalProperties:
+              type: string
+        - name: with_owners
+          in: query
+          description: Include owner information (1 = yes, 0 = no — backend wants integer wire value)
+          required: false
+          schema:
+            type: integer
+            enum: [0, 1]
+            default: 0
+      responses:
+        '200':
+          description: List of chats
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - status
+                  - chats
+                  - meta
+                  - pagination
+                properties:
+                  status:
+                    type: boolean
+                  chats:
+                    type: object
+                    additionalProperties:
+                      $ref: '#/components/schemas/ChatResource'
+                  chats_sort:
+                    type: array
+                    items:
+                      type: string
+                  users:
+                    type: object
+                    additionalProperties:
+                      $ref: '#/components/schemas/UserResource'
+                  meta:
+                    type: object
+                    required:
+                      - total
+                      - output
+                    properties:
+                      total:
+                        type: integer
+                      output:
+                        type: integer
+                  pagination:
+                    type: object
+                    required:
+                      - items_per_page
+                      - current
+                      - total
+                    properties:
+                      items_per_page:
+                        type: integer
+                      current:
+                        type: integer
+                      total:
+                        type: integer
+                      next_page_url:
+                        type: string
+                        nullable: true
+                      prev_page_url:
+                        type: string
+                        nullable: true
+
+    post:
+      summary: Create a new chat
+      operationId: chat.create
+      tags:
+        - Chats
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - chat
+              properties:
+                chat:
+                  type: object
+                  required:
+                    - id
+                    - title
+                    - type
+                  properties:
+                    id:
+                      type: string
+                      description: Unique chat identifier
+                      maxLength: 255
+                    title:
+                      type: string
+                      description: Chat title
+                      maxLength: 255
+                    type:
+                      type: string
+                      description: Chat type
+                      enum: [private, group, supergroup, channel]
+                    metadata:
+                      type: object
+                      description: Custom metadata fields
+                      maxProperties: 64
+                      additionalProperties:
+                        type: string
+                    owner:
+                      $ref: '#/components/schemas/User'
+                participants:
+                  type: array
+                  maxItems: 10
+                  items:
+                    $ref: '#/components/schemas/ParticipantInput'
+      responses:
+        '201':
+          description: Chat created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      chat:
+                        $ref: '#/components/schemas/ChatResource'
+                      participants:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ParticipantResource'
+        '409':
+          description: Chat already exists
+
+  /chats/{chat_id}:
+    parameters:
+      - name: chat_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Chat ID
+    get:
+      summary: Get chat details
+      operationId: chat.show
+      tags:
+        - Chats
+      responses:
+        '200':
+          description: Chat details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      chat:
+                        $ref: '#/components/schemas/ChatResource'
+
+    put:
+      summary: Update chat
+      operationId: chat.update
+      tags:
+        - Chats
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                chat:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      maxLength: 255
+                    title:
+                      type: string
+                      maxLength: 255
+                    metadata:
+                      type: object
+                      additionalProperties:
+                        type: string
+      responses:
+        '200':
+          description: Chat updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      chat:
+                        $ref: '#/components/schemas/ChatResource'
+
+    delete:
+      summary: Delete chat
+      operationId: chat.delete
+      tags:
+        - Chats
+      responses:
+        '200':
+          description: Chat deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+
+  /chats/{chat_id}/participants:
+    parameters:
+      - $ref: '#/components/parameters/chatIdParam'
+    get:
+      summary: List chat participants
+      operationId: chat.participants
+      tags:
+        - Chat Participants
+      parameters:
+        - $ref: '#/components/parameters/limitParam'
+        - $ref: '#/components/parameters/pageParam'
+      responses:
+        '200':
+          description: List of participants
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - status
+                  - participants
+                  - meta
+                  - pagination
+                properties:
+                  participants:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ParticipantResource'
+                  meta:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                      output:
+                        type: integer
+                  pagination:
+                    type: object
+                    properties:
+                      items_per_page:
+                        type: integer
+                      current:
+                        type: integer
+                      total:
+                        type: integer
+
+    post:
+      summary: Add participants to chat
+      operationId: chat.addParticipants
+      tags:
+        - Chat Participants
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                participants:
+                  type: array
+                  maxItems: 100
+                  required:
+                    - id
+                  items:
+                    type: object
+                    required:
+                      - id
+                    properties:
+                      id:
+                        type: string
+                      name:
+                        type: string
+                        maxLength: 100
+                      email:
+                        type: string
+                        format: email
+                      link:
+                        type: string
+                        format: uri
+                      picture:
+                        type: string
+                      is_bot:
+                        type: boolean
+      responses:
+        '200':
+          description: Participants added
+
+  /chats/{chat_id}/participants/{user_id}:
+    parameters:
+      - $ref: '#/components/parameters/chatIdParam'
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: User ID
+    delete:
+      summary: Remove participant from chat
+      operationId: chat.deleteParticipants
+      tags:
+        - Chat Participants
+      responses:
+        '200':
+          description: Participant removed
+        '404':
+          description: User not found in chat
+
+  /chats/{chat_id}/messages:
+    parameters:
+      - $ref: '#/components/parameters/chatIdParam'
+    get:
+      summary: List messages in chat
+      operationId: chat.messages
+      tags:
+        - Chat Messages
+      parameters:
+        - $ref: '#/components/parameters/limitParam'
+        - $ref: '#/components/parameters/pageParam'
+        - name: with_users
+          in: query
+          description: Include user information (1 = yes, 0 = no — backend wants integer wire value)
+          required: false
+          schema:
+            type: integer
+            enum: [0, 1]
+        - name: isDeleted
+          in: query
+          description: Filter deleted messages (1 = yes, 0 = no — backend wants integer wire value)
+          required: false
+          schema:
+            type: integer
+            enum: [0, 1]
+        - name: isEdited
+          in: query
+          description: Filter edited messages (1 = yes, 0 = no — backend wants integer wire value)
+          required: false
+          schema:
+            type: integer
+            enum: [0, 1]
+        - name: extra
+          in: query
+          description: Filter by message extra fields
+          required: false
+          style: deepObject
+          schema:
+            type: object
+            additionalProperties:
+              type: string
+      responses:
+        '200':
+          description: List of messages
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - status
+                  - messages
+                  - meta
+                  - pagination
+                properties:
+                  messages:
+                    type: object
+                    additionalProperties:
+                      $ref: '#/components/schemas/MessageResource'
+                  messages_sort:
+                    type: array
+                    items:
+                      type: string
+                  users:
+                    type: object
+                    additionalProperties:
+                      $ref: '#/components/schemas/ParticipantResource'
+                  meta:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                      output:
+                        type: integer
+                  pagination:
+                    type: object
+                    properties:
+                      items_per_page:
+                        type: integer
+                      current:
+                        type: integer
+                      total:
+                        type: integer
+                      next_page_url:
+                        type: string
+                        nullable: true
+                      prev_page_url:
+                        type: string
+                        nullable: true
+
+    post:
+      summary: Send messages to chat
+      operationId: chat.sendMessage
+      tags:
+        - Chat Messages
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - user
+                - messages
+              properties:
+                user:
+                  $ref: '#/components/schemas/User'
+                chat:
+                  type: object
+                  properties:
+                    type:
+                      type: string
+                      enum: [private, group, supergroup, channel]
+                    title:
+                      type: string
+                      maxLength: 255
+                    metadata:
+                      type: object
+                      maxProperties: 64
+                      additionalProperties:
+                        type: string
+                participants:
+                  type: array
+                  maxItems: 10
+                  items:
+                    $ref: '#/components/schemas/ParticipantInput'
+                messages:
+                  type: array
+                  maxItems: 50
+                  required:
+                    - text
+                  items:
+                    type: object
+                    required:
+                      - text
+                    properties:
+                      text:
+                        type: string
+                        maxLength: 4096
+                      extra:
+                        type: object
+                        additionalProperties:
+                          type: string
+                      recipient_id:
+                        type: string
+                      buttons:
+                        type: array
+                        maxItems: 4
+                        items:
+                          $ref: '#/components/schemas/Button'
+                      disable_notification:
+                        type: boolean
+      responses:
+        '200':
+          description: Messages sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                  message_ids:
+                    type: array
+                    items:
+                      type: string
+
+  /chats/{chat_id}/messages/{message}:
+    parameters:
+      - $ref: '#/components/parameters/chatIdParam'
+      - name: message
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Message ID
+    put:
+      summary: Update message
+      operationId: chat.updateMessage
+      tags:
+        - Chat Messages
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: object
+                  properties:
+                    text:
+                      type: string
+                      maxLength: 4096
+                    is_deleted:
+                      type: boolean
+                    extra:
+                      type: object
+                      additionalProperties:
+                        type: string
+                    buttons:
+                      type: array
+                      maxItems: 4
+                      items:
+                        $ref: '#/components/schemas/Button'
+                update_extra_mode:
+                  type: string
+                  enum: [merge, replace]
+                return_message:
+                  type: boolean
+                  description: When true, response includes the updated message body.
+      responses:
+        '200':
+          description: Message updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                  is_updated:
+                    type: boolean
+                  message:
+                    $ref: '#/components/schemas/MessageResource'
+
+  /chats/{chat_id}/typing/{user_id}:
+    parameters:
+      - $ref: '#/components/parameters/chatIdParam'
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: User ID
+    put:
+      summary: Send typing indicator
+      operationId: chat.sendTyping
+      tags:
+        - Chat Messages
+      responses:
+        '200':
+          description: Typing indicator sent
+
+  /chats/{chat_id}/webhook:
+    parameters:
+      - $ref: '#/components/parameters/chatIdParam'
+    put:
+      summary: Set chat webhook settings
+      operationId: chat.setWebhook
+      tags:
+        - Chat Webhooks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                disabled:
+                  type: boolean
+                url:
+                  type: string
+                  format: uri
+      responses:
+        '200':
+          description: Webhook settings updated
+
+  /chats/{chat_id}/s3-credentials:
+    parameters:
+      - $ref: '#/components/parameters/chatIdParam'
+    put:
+      summary: Set S3 credentials for chat
+      operationId: chat.setS3Credentials
+      tags:
+        - Chat S3
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - access_key
+                - secret_key
+                - endpoint_url
+                - bucket
+              properties:
+                access_key:
+                  type: string
+                  maxLength: 40
+                secret_key:
+                  type: string
+                  maxLength: 40
+                endpoint_url:
+                  type: string
+                  format: uri
+                bucket:
+                  type: string
+                region:
+                  type: string
+                  maxLength: 20
+                s3_path_style:
+                  type: boolean
+                public_url:
+                  type: string
+                  format: uri
+                cdn_url:
+                  type: string
+                  format: uri
+      responses:
+        '200':
+          description: S3 credentials updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                  modified:
+                    type: boolean
+
+  /users:
+    post:
+      summary: Create user
+      operationId: user.create
+      tags:
+        - Users
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - user
+              properties:
+                user:
+                  type: object
+                  required:
+                    - id
+                    - name
+                  properties:
+                    id:
+                      type: string
+                      maxLength: 255
+                    name:
+                      type: string
+                      maxLength: 255
+                    email:
+                      type: string
+                      format: email
+                    link:
+                      type: string
+                      format: uri
+                    picture:
+                      type: string
+                      format: uri
+                    metadata:
+                      type: object
+                      maxProperties: 64
+                      additionalProperties:
+                        type: string
+      responses:
+        '201':
+          description: User created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        $ref: '#/components/schemas/UserResource'
+        '409':
+          description: User already exists
+
+  /users/{user_id}:
+    parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: User ID
+    get:
+      summary: Get user details
+      operationId: user.show
+      tags:
+        - Users
+      responses:
+        '200':
+          description: User details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        $ref: '#/components/schemas/UserResource'
+
+    put:
+      summary: Update user
+      operationId: user.update
+      tags:
+        - Users
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      maxLength: 255
+                    name:
+                      type: string
+                      maxLength: 255
+                    email:
+                      type: string
+                      format: email
+                    link:
+                      type: string
+                      format: uri
+                    picture:
+                      type: string
+                      format: uri
+                    metadata:
+                      type: object
+                      additionalProperties:
+                        type: string
+      responses:
+        '200':
+          description: User updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        $ref: '#/components/schemas/UserResource'
+
+    delete:
+      summary: Delete user
+      operationId: user.delete
+      tags:
+        - Users
+      responses:
+        '200':
+          description: User deleted
+
+  /users/{user_id}/chats:
+    parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: User ID
+    get:
+      summary: Get user chats
+      operationId: user.chats
+      tags:
+        - Users
+      parameters:
+        - $ref: '#/components/parameters/limitParam'
+        - $ref: '#/components/parameters/pageParam'
+        - name: order
+          in: query
+          description: Sort order
+          required: false
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: asc
+        - name: read
+          in: query
+          description: Filter read/unread chats
+          required: false
+          schema:
+            type: boolean
+        - name: metadata
+          in: query
+          description: Filter by metadata
+          required: false
+          style: deepObject
+          schema:
+            type: object
+            additionalProperties:
+              type: string
+      responses:
+        '200':
+          description: List of chats
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - status
+                  - chats
+                  - meta
+                  - pagination
+                properties:
+                  chats:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ChatResource'
+                  meta:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                      output:
+                        type: integer
+                  pagination:
+                    type: object
+                    properties:
+                      items_per_page:
+                        type: integer
+                      current:
+                        type: integer
+                      total:
+                        type: integer
+                      next_page_url:
+                        type: string
+                        nullable: true
+                      prev_page_url:
+                        type: string
+                        nullable: true
+
+  /users/{user_id}/fcm_tokens:
+    parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: User ID
+    post:
+      summary: Add FCM token
+      operationId: user.addFcmToken
+      tags:
+        - Users
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - token
+                - device_type
+              properties:
+                token:
+                  type: string
+                  maxLength: 255
+                device_type:
+                  type: string
+                  enum: [android, ios, web]
+                device_fingerprint:
+                  type: string
+                  maxLength: 255
+      responses:
+        '200':
+          description: FCM token added
+
+  /s3-credentials:
+    put:
+      summary: Set tenant S3 credentials
+      operationId: tenant.setS3Credentials
+      tags:
+        - Tenant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - access_key
+                - secret_key
+                - endpoint_url
+                - bucket
+              properties:
+                access_key:
+                  type: string
+                  maxLength: 40
+                secret_key:
+                  type: string
+                  maxLength: 40
+                endpoint_url:
+                  type: string
+                  format: uri
+                bucket:
+                  type: string
+                region:
+                  type: string
+                  maxLength: 20
+                s3_path_style:
+                  type: boolean
+                public_url:
+                  type: string
+                  format: uri
+                cdn_url:
+                  type: string
+                  format: uri
+      responses:
+        '200':
+          description: S3 credentials updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                  modified:
+                    type: boolean
+
+  /webhook:
+    put:
+      summary: Set tenant webhook settings
+      operationId: tenant.setWebhookSettings
+      tags:
+        - Tenant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                disabled:
+                  type: boolean
+                url:
+                  type: string
+                  format: uri
+      responses:
+        '200':
+          description: Webhook settings updated
+
+  /firebase/js_config:
+    put:
+      summary: Set Firebase config for JS
+      operationId: tenant.setFirebaseConfigForJs
+      tags:
+        - Firebase
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - api_key
+                - auth_domain
+                - project_id
+                - storage_bucket
+                - messaging_sender_id
+                - app_id
+              properties:
+                api_key:
+                  type: string
+                  maxLength: 255
+                auth_domain:
+                  type: string
+                  maxLength: 255
+                project_id:
+                  type: string
+                  maxLength: 255
+                storage_bucket:
+                  type: string
+                  maxLength: 255
+                messaging_sender_id:
+                  type: string
+                  maxLength: 255
+                app_id:
+                  type: string
+                  maxLength: 255
+                measurement_id:
+                  type: string
+                  maxLength: 255
+      responses:
+        '200':
+          description: Firebase config updated
+
+  /firebase/svc_acc_credentials:
+    put:
+      summary: Set Firebase service account
+      operationId: tenant.setFirebaseServiceAccount
+      tags:
+        - Firebase
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - type
+                - project_id
+                - private_key_id
+                - private_key
+                - client_email
+                - client_id
+                - auth_uri
+                - token_uri
+                - auth_provider_x509_cert_url
+                - client_x509_cert_url
+                - universe_domain
+              properties:
+                type:
+                  type: string
+                  maxLength: 100
+                project_id:
+                  type: string
+                  maxLength: 150
+                private_key_id:
+                  type: string
+                  maxLength: 100
+                private_key:
+                  type: string
+                  maxLength: 2000
+                client_email:
+                  type: string
+                  format: email
+                client_id:
+                  type: string
+                  maxLength: 100
+                auth_uri:
+                  type: string
+                  format: uri
+                token_uri:
+                  type: string
+                  format: uri
+                auth_provider_x509_cert_url:
+                  type: string
+                  format: uri
+                client_x509_cert_url:
+                  type: string
+                  format: uri
+                universe_domain:
+                  type: string
+                  maxLength: 255
+      responses:
+        '200':
+          description: Firebase service account updated
+
+  /firebase/fcm_vapid:
+    put:
+      summary: Set Firebase FCM VAPID
+      operationId: tenant.setFirebaseFcmVapid
+      tags:
+        - Firebase
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - public_key
+                - private_key
+              properties:
+                public_key:
+                  type: string
+                  maxLength: 255
+                private_key:
+                  type: string
+                  maxLength: 255
+      responses:
+        '200':
+          description: Firebase FCM VAPID updated
+
+  /settings/push-notifications:
+    put:
+      summary: Set push notification settings
+      operationId: tenant.setPushNotificationsSettings
+      tags:
+        - Settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                icon:
+                  type: string
+                  format: uri
+                  maxLength: 100
+                url_template:
+                  type: string
+                  maxLength: 255
+                disabled:
+                  type: boolean
+      responses:
+        '200':
+          description: Push notification settings updated
+
+  /clear:
+    put:
+      summary: Clear tenant data
+      operationId: tenant.clearData
+      tags:
+        - Tenant
+      parameters:
+        - $ref: '#/components/parameters/syncParam'
+      responses:
+        '200':
+          description: Job dispatched to clear tenant data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                  job_id:
+                    type: string
+        '400':
+          description: Data clearing is disabled for this tenant
+
+components:
+  schemas:
+    ParticipantInput:
+      description: |
+        Participant payload for chat creation / addParticipants / sendMessage.
+        Distinct from `User` because participants carry an optional `is_bot` flag
+        that the bare User entity doesn't model.
+      type: object
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          maxLength: 255
+        name:
+          type: string
+          maxLength: 255
+        email:
+          type: string
+          format: email
+        link:
+          type: string
+          format: uri
+        picture:
+          type: string
+        is_bot:
+          type: boolean
+
+    Button:
+      description: Inline action button attached to a message.
+      type: object
+      required:
+        - type
+        - label
+      properties:
+        action:
+          type: string
+          maxLength: 255
+        type:
+          type: string
+          enum: [url, call, local, remote]
+        label:
+          type: string
+          maxLength: 100
+        state:
+          type: string
+          enum: [default, loading, disabled]
+        style:
+          type: string
+          enum: [primary, positive, negative, neutral]
+
+    Avatar:
+      description: |
+        User avatar — either a URL string when an image is set, or an object
+        describing an auto-generated placeholder (initials on a colored bg).
+      oneOf:
+        - type: string
+          format: uri
+        - type: object
+          required:
+            - kind
+          properties:
+            kind:
+              type: string
+              description: Auto-generated avatar kind (e.g. "auto")
+            color:
+              type: string
+              description: Display color for the placeholder
+            initials:
+              type: string
+              description: Initials shown on the placeholder
+
+    User:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          maxLength: 255
+        name:
+          type: string
+          maxLength: 255
+        email:
+          type: string
+          format: email
+        link:
+          type: string
+          format: uri
+        picture:
+          type: string
+          format: uri
+        metadata:
+          type: object
+          maxProperties: 64
+          additionalProperties:
+            type: string
+
+    UserResource:
+      type: object
+      required:
+        - id
+        - name
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        link:
+          type: string
+          format: uri
+        picture:
+          $ref: '#/components/schemas/Avatar'
+        created_at:
+          type: string
+        updated_at:
+          type: string
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+
+    ParticipantResource:
+      type: object
+      required:
+        - id
+        - name
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        link:
+          type: string
+          format: uri
+        picture:
+          $ref: '#/components/schemas/Avatar'
+        created_at:
+          type: string
+        updated_at:
+          type: string
+
+    ChatResource:
+      type: object
+      required:
+        - id
+        - type
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          description: Chat ID
+        type:
+          type: string
+          description: Chat type
+          enum: [private, group, supergroup, channel]
+        title:
+          type: string
+          description: Chat title
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        last_message_at:
+          type: string
+          format: date-time
+        owner_id:
+          type: string
+          description: External owner ID
+        owner:
+          $ref: '#/components/schemas/UserResource'
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+
+    MessageResource:
+      type: object
+      required:
+        - id
+        - user_id
+        - created_at
+        - is_deleted
+      properties:
+        id:
+          type: string
+        user_id:
+          type: string
+        text:
+          type: string
+        created_at:
+          type: integer
+          format: int64
+        updated_at:
+          type: integer
+          format: int64
+          nullable: true
+        is_deleted:
+          type: boolean
+        is_edited:
+          type: boolean
+        versions:
+          type: integer
+          description: Number of message versions
+        extra:
+          type: object
+          additionalProperties:
+            type: string
+        recipient_id:
+          type: string
+        buttons:
+          type: array
+          maxItems: 4
+          items:
+            type: object
+            properties:
+              action:
+                type: string
+              type:
+                type: string
+                enum: [url, call, local, remote]
+              label:
+                type: string
+              state:
+                type: string
+                enum: [default, loading, disabled]
+              style:
+                type: string
+                enum: [primary, positive, negative, neutral]
+
+  parameters:
+    chatIdParam:
+      name: chat_id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Chat ID
+
+    syncParam:
+      name: sync
+      in: query
+      required: false
+      schema:
+        type: boolean
+      description: force sync execution of method
+
+    limitParam:
+      name: limit
+      in: query
+      description: Number of items to return
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 1000
+        default: 50
+
+    pageParam:
+      name: page
+      in: query
+      description: Page number
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyQuery:
+      type: apiKey
+      in: query
+      name: api_key
+    apiKeyHeader:
+      type: apiKey
+      in: header
+      name: X-API-Key
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Chats
+    description: Chat management
+  - name: Chat Participants
+    description: Chat participants management
+  - name: Chat Messages
+    description: Chat messages management
+  - name: Chat Webhooks
+    description: Chat webhook configuration
+  - name: Chat S3
+    description: Chat S3 storage configuration
+  - name: Users
+    description: User management
+  - name: Tenant
+    description: Tenant configuration
+  - name: Firebase
+    description: Firebase configuration
+  - name: Settings
+    description: General settings

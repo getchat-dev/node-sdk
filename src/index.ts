@@ -2,6 +2,19 @@ import * as crypto from 'node:crypto';
 import * as http from 'node:http';
 import * as https from 'node:https';
 import * as querystring from 'node:querystring';
+import {
+    type ChatListInput,
+    type ChatMessagesInput,
+    type ChatSendMessageInput,
+    createOperations,
+    type Operations,
+} from './generated/operations.js';
+
+// Convenience aliases for query/body slots — used when hand-written methods
+// build inputs to delegate into `.api.*`.
+type ChatListQuery = NonNullable<NonNullable<ChatListInput>['query']>;
+type ChatMessagesQuery = NonNullable<NonNullable<ChatMessagesInput>['query']>;
+type ChatSendMessageBody = ChatSendMessageInput['body'];
 
 import * as _ from './libs/helpers.js';
 import processUserRights from './libs/processUserRights.js';
@@ -70,6 +83,12 @@ export class Emby {
     baseUrl?: string;
     apiUrl?: string;
 
+    /**
+     * Auto-generated, Zod-validated API methods — one per operationId in openapi.yml.
+     * Regenerated via `npm run generate`. Complements the hand-written high-level methods below.
+     */
+    readonly api: Operations;
+
     constructor(config: EmbyConfig = {}) {
         this.clientId = config.id;
         this.clientSecret = config.secret;
@@ -80,6 +99,8 @@ export class Emby {
         if (_.isString(this.baseUrl)) {
             this.baseUrl = this.baseUrl.replace(/\/+$/g, '');
         }
+
+        this.api = createOperations(this);
     }
 
     requestApi<T = unknown>(
@@ -87,13 +108,20 @@ export class Emby {
         params: Record<string, unknown> = {},
         type: HttpMethod = 'get',
         version = 'v1',
+        query?: Record<string, unknown>,
     ): Promise<T> {
         let sParams = '';
 
         let _url = `${this.apiUrl}/api/${version}/${method}`;
 
-        if (!(type === 'post' || type === 'put')) {
-            _url += `?${querystring.stringify(flatten(params) as querystring.ParsedUrlQueryInput)}`;
+        const isBodyMethod = type === 'post' || type === 'put';
+        if (isBodyMethod) {
+            if (query && Object.keys(query).length > 0) {
+                _url += `?${querystring.stringify(flatten(query) as querystring.ParsedUrlQueryInput)}`;
+            }
+        } else {
+            const merged = query ? { ...params, ...query } : params;
+            _url += `?${querystring.stringify(flatten(merged) as querystring.ParsedUrlQueryInput)}`;
         }
 
         _url = encodeURI(_url);
@@ -112,7 +140,7 @@ export class Emby {
             },
         };
 
-        if (type === 'post' || type === 'put') {
+        if (isBodyMethod) {
             sParams = JSON.stringify(params);
         }
 
@@ -139,8 +167,10 @@ export class Emby {
                         if (status >= 200 && status < 400) {
                             resolve(body as T);
                         } else {
-                            const e = new Error(body as string) as Error & { status?: number };
+                            const message = typeof body === 'string' ? body : JSON.stringify(body);
+                            const e = new Error(message) as Error & { status?: number; body?: unknown };
                             e.status = status;
+                            e.body = body;
                             reject(e);
                         }
                     });
@@ -351,98 +381,96 @@ export class Emby {
             throw new Error('queryParams must be a plain object');
         }
 
-        const params: Record<string, unknown> = {};
+        const query: Partial<ChatListQuery> = {
+            page: Math.max(parseInt(String(queryParams.page), 10) || 1, 1),
+            limit: Math.min(parseInt(String(queryParams.limit), 10) || 1, 1000),
+        };
 
-        params.page = Math.max(parseInt(String(queryParams.page), 10) || 1, 1);
-        params.limit = Math.min(parseInt(String(queryParams.limit), 10) || 1, 1000);
-
-        const availableParams = [
+        for (const key of [
             'type',
             'owner',
-            'with_owners',
             'created_from',
             'created_to',
             'last_message_from',
             'last_message_to',
-        ] as const;
-
-        availableParams.forEach((key) => {
+        ] as const) {
             const raw = (queryParams as Record<string, unknown>)[key];
-            if (_.isNoValue(raw)) return;
-
-            if (key === 'with_owners') {
-                if (_.isBoolean(raw) || _.isTRUE(raw)) {
-                    params[key] = 1;
-                } else if (_.isNumeric(raw)) {
-                    params[key] = parseInt(String(raw), 10);
-                }
-            } else if (_.isString(raw) && raw.length > 0) {
-                params[key] = raw;
+            if (!_.isNoValue(raw) && _.isString(raw) && raw.length > 0) {
+                (query as Record<string, unknown>)[key] = raw;
             }
-        });
-
-        if (_.isFilledPlainObject(queryParams.metadata)) {
-            params.metadata = queryParams.metadata;
         }
 
-        return this.requestApi<T>('chats', params, 'get');
+        // with_owners: lenient input (bool/yes/on/1/0/numeric) → spec wire integer 0|1.
+        if (!_.isNoValue(queryParams.with_owners)) {
+            const raw = queryParams.with_owners as unknown;
+            if (_.isBoolean(raw) || _.isTRUE(raw)) {
+                query.with_owners = 1;
+            } else if (_.isNumeric(raw)) {
+                const n = parseInt(String(raw), 10);
+                if (n === 0 || n === 1) query.with_owners = n as 0 | 1;
+            }
+        }
+
+        if (_.isFilledPlainObject(queryParams.metadata)) {
+            query.metadata = queryParams.metadata as ChatListQuery['metadata'];
+        }
+
+        return this.api.chatList<T>({ query: query as ChatListQuery });
     }
 
     getChatInfo<T = unknown>(id: string): Promise<T> {
         if (!_.isString(id)) {
             throw new Error("chat id isn't passed");
         }
-        return this.requestApi<T>(`chats/${id}`);
+        return this.api.chatShow<T>({ path: { chat_id: id } });
     }
 
+    /**
+     * Bug-fix in 1.13: legacy code sent `withUsers=1` (camelCase) — backend silently ignored it.
+     * Now coerces to spec `with_users=1` (snake_case + integer wire). Public-API field name
+     * remains `with_users` (matches `GetChatMessagesQuery`); legacy `withUsers` callers also accepted.
+     */
     getMessagesFromChat<T = unknown>(
         chatId: string,
         queryParams?: GetChatMessagesQuery,
         page = 1,
         limit = 1,
     ): Promise<T> {
-        const clampedLimit = Math.min(parseInt(String(limit), 10), 1000);
-        const clampedPage = Math.max(parseInt(String(page), 10), 1);
-
-        let params: Record<string, unknown> = {
-            page: clampedPage,
-            limit: clampedLimit,
+        const query: Partial<ChatMessagesQuery> = {
+            page: Math.max(parseInt(String(page), 10), 1),
+            limit: Math.min(parseInt(String(limit), 10), 1000),
         };
 
         if (_.isFilledPlainObject(queryParams)) {
-            const merged: Record<string, unknown> = {};
-
+            // extra: keep scalar values; coerce smart-booleans to 'true'/'false' strings
+            // so the spec's `Record<string, string>` schema accepts them.
             if (_.isFilledPlainObject(queryParams.extra)) {
-                const extraParams: Record<string, unknown> = {};
-
-                Object.keys(queryParams.extra).forEach((key) => {
+                const extraParams: Record<string, string> = {};
+                for (const key of Object.keys(queryParams.extra)) {
                     const value = (queryParams.extra as StringMap)[key];
                     if (_.isScalar(value)) {
-                        extraParams[key] = _.isBoolean(value, true) ? _.isTRUE(value) : value;
+                        extraParams[key] = _.isBoolean(value, true) ? String(_.isTRUE(value)) : String(value);
                     }
-                });
-
+                }
                 if (Object.keys(extraParams).length) {
-                    merged.extra = extraParams;
+                    query.extra = extraParams;
                 }
             }
 
             if (_.isBoolean(queryParams.isDeleted, true)) {
-                merged.isDeleted = Number(_.isTRUE(queryParams.isDeleted));
+                query.isDeleted = Number(_.isTRUE(queryParams.isDeleted)) as 0 | 1;
             }
             if (_.isBoolean(queryParams.isEdited, true)) {
-                merged.isEdited = Number(_.isTRUE(queryParams.isEdited));
+                query.isEdited = Number(_.isTRUE(queryParams.isEdited)) as 0 | 1;
             }
-            if (_.isBoolean((queryParams as { withUsers?: unknown }).withUsers, true)) {
-                merged.withUsers = Number(_.isTRUE((queryParams as { withUsers?: unknown }).withUsers));
-            }
-
-            if (Object.keys(merged).length) {
-                params = { ...params, ...merged };
+            // Accept both spec `with_users` and legacy `withUsers` input field names.
+            const withUsersRaw = queryParams.with_users ?? (queryParams as { withUsers?: unknown }).withUsers;
+            if (_.isBoolean(withUsersRaw, true)) {
+                query.with_users = Number(_.isTRUE(withUsersRaw)) as 0 | 1;
             }
         }
 
-        return this.requestApi<T>(`chats/${chatId}/messages`, params);
+        return this.api.chatMessages<T>({ path: { chat_id: chatId }, query: query as ChatMessagesQuery });
     }
 
     sendMessage<T = unknown>(
@@ -453,29 +481,24 @@ export class Emby {
         extra: StringMap = {},
         buttons: MessageButton[] = [],
     ): Promise<T> {
-        const queryParams: Record<string, unknown> = {
-            user,
-            participants,
-        };
-
-        const messageData: Record<string, unknown> = {};
+        // Build the message item first — text/recipient_id then extras.
+        const messageData: { text?: string; recipient_id?: string; extra?: StringMap; buttons?: MessageButton[] } = {};
 
         if (_.isPlainObject(message)) {
             const normalized = normalizeData(message, ['text', 'recipient_id']);
-            if (_.isString(normalized.text)) {
-                messageData.text = normalized.text;
-            }
+            if (_.isString(normalized.text)) messageData.text = normalized.text;
             if (!_.isNoValue(normalized.recipient_id)) {
-                messageData.recipient_id = normalized.recipient_id;
+                messageData.recipient_id = normalized.recipient_id as string;
             }
         } else if (_.isString(message)) {
             messageData.text = message;
         }
 
-        if (!(_.isString(messageData.text) && (messageData.text as string).length)) {
+        if (!(_.isString(messageData.text) && messageData.text.length)) {
             throw new Error('message text is required');
         }
 
+        // Resolve chat id (path param) and split off the rest as body.chat (optional).
         let chatData: Record<string, unknown>;
         if (_.isPlainObject(chat)) {
             chatData = normalizeChat(chat);
@@ -494,85 +517,107 @@ export class Emby {
 
         const chatId = chatData.id as string;
         delete chatData.id;
-        if (Object.keys(chatData).length) {
-            queryParams.chat = chatData;
-        }
 
-        if (_.isFilledPlainObject(extra)) {
-            messageData.extra = extra;
-        }
+        if (_.isFilledPlainObject(extra)) messageData.extra = extra;
+        if (_.isFilledArray(buttons)) messageData.buttons = buttons;
 
-        if (_.isFilledArray(buttons)) {
-            messageData.buttons = buttons;
-        }
-
+        // Build body honoring the spec shape: { user (required), chat?, participants?, messages }
+        const body: Record<string, unknown> = {
+            user,
+            messages: [messageData],
+        };
+        if (Object.keys(chatData).length) body.chat = chatData;
         if (_.isFilledArray(participants)) {
-            const normalized = (participants as Participant[]).map(normalizeParticipant);
-            if (_.isFilledArray(normalized)) {
-                queryParams.participants = normalized;
-            }
+            body.participants = (participants as Participant[]).map(normalizeParticipant);
         }
 
-        queryParams.messages = [messageData];
-
-        return this.requestApi<T>(`chats/${chatId}/messages`, queryParams, 'post');
+        return this.api.chatSendMessage<T>({
+            path: { chat_id: chatId },
+            body: body as ChatSendMessageBody,
+        });
     }
 
+    /**
+     * Wire-format aligned with spec in 1.13: `is_deleted` now boolean (was `'1'` string),
+     * `return_message` now boolean (was `'1'` string). Backend is lenient — both forms
+     * still work — but spec is authoritative going forward.
+     */
     updateMessage<T = unknown>(
         chatId: string,
         messageId: string,
         { text, isDeleted = false, extra = {}, buttons = [] }: UpdateMessageInput,
         { replaceExtra = false, returnMessage = false }: UpdateMessageOptions = {},
     ): Promise<T> {
-        const params: Record<string, unknown> = { message: {} as Record<string, unknown> };
-        const messageBody = params.message as Record<string, unknown>;
+        const messageBody: {
+            text?: string;
+            is_deleted?: boolean;
+            extra?: StringMap;
+            buttons?: MessageButton[];
+        } = {};
 
         if (_.isString(text) && text.length) {
             messageBody.text = text;
         }
-
         if (_.isTRUE(isDeleted)) {
-            messageBody.is_deleted = '1';
+            messageBody.is_deleted = true;
             delete messageBody.text;
         }
-
         if (_.isFilledPlainObject(extra)) {
             messageBody.extra = extra;
         }
-
         if (_.isFilledArray(buttons)) {
             messageBody.buttons = buttons;
         }
 
-        params.update_extra_mode = replaceExtra === true ? 'replace' : 'merge';
-
-        if (returnMessage === true) {
-            params.return_message = '1';
-        }
-
-        return this.requestApi<T>(`chats/${chatId}/messages/${messageId}`, params, 'put');
+        return this.api.chatUpdateMessage<T>({
+            path: { chat_id: chatId, message: messageId },
+            body: {
+                message: messageBody,
+                update_extra_mode: replaceExtra === true ? 'replace' : 'merge',
+                ...(returnMessage === true ? { return_message: true } : {}),
+            },
+        });
     }
 
+    /**
+     * Soft-delete a message. Wire format aligned with the openapi spec (`is_deleted: true` boolean).
+     * Backend is lenient — accepts both `true` and `'1'` — but spec is authoritative going forward.
+     */
     deleteMessage<T = unknown>(chatId: string, messageId: string): Promise<T> {
-        const params: Record<string, unknown> = { message: { is_deleted: '1' } };
-        return this.requestApi<T>(`chats/${chatId}/messages/${messageId}`, params, 'put');
+        return this.api.chatUpdateMessage<T>({
+            path: { chat_id: chatId, message: messageId },
+            body: { message: { is_deleted: true } },
+        });
     }
 
+    /**
+     * BREAKING (1.13): now sends `PUT /chats/{chat_id}/typing/{user_id}` (no body) per the
+     * OpenAPI spec, which is what the backend actually accepts. The previous shape
+     * (`PUT /chats/{chat_id}/typing` with `{ user: userId }` body) is no longer used.
+     * Verified live; legacy URL silently failed.
+     */
     sendTyping<T = unknown>(chatId: string, userId: string): Promise<T> {
-        const queryParams: Record<string, unknown> = { user: userId };
-        return this.requestApi<T>(`chats/${chatId}/typing`, queryParams, 'put');
+        return this.api.chatSendTyping<T>({ path: { chat_id: chatId, user_id: userId } });
     }
 
     addParticipantsToChat<T = unknown>(chatId: string, participants: Participant[] = []): Promise<T> {
         if (!_.isFilledArray(participants)) {
             throw new Error('participants have to be an array of participant objects');
         }
-
-        const queryParams: Record<string, unknown> = {
-            participants: participants.map(normalizeParticipant),
-        };
-
-        return this.requestApi<T>(`chats/${chatId}/participants`, queryParams, 'post');
+        // normalizeParticipant whitelists fields and applies is_bot default; the result
+        // shape matches the chatAddParticipants body schema.
+        const normalized = participants.map(normalizeParticipant) as Array<{
+            id: string;
+            name?: string;
+            email?: string;
+            link?: string;
+            picture?: string;
+            is_bot?: boolean;
+        }>;
+        return this.api.chatAddParticipants<T>({
+            path: { chat_id: chatId },
+            body: { participants: normalized },
+        });
     }
 }
 

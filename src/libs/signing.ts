@@ -54,13 +54,13 @@ export const normalizeData = (data: unknown, filter: NormalizeFilter = []): Reco
         const spec = filterObj?.[key];
 
         if (_.isFunction(_.getValue(filter, [key, 'process']))) {
-            const processed = spec!.process!(source[key]);
+            const processed = spec?.process?.(source[key]);
             if (processed !== undefined) {
                 result[key] = _trim(processed);
             }
         } else if (_.isNoValue(source[key])) {
             if (_.getValue(filter, [key, 'default'], undefined) !== undefined) {
-                result[key] = _trim(spec!.default);
+                result[key] = _trim(spec?.default);
             }
         } else {
             result[key] = _trim(source[key]);

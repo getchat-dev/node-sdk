@@ -22,7 +22,7 @@ describe('Emby.deleteMessage()', () => {
         server.reset();
     });
 
-    test('PUT /chats/c1/messages/m1 with body { message: { is_deleted: "1" } }', async () => {
+    test('PUT /chats/c1/messages/m1 with body { message: { is_deleted: true } } (spec format)', async () => {
         server.respondWith(loadFixture('chats/update-message/success-deleted'));
 
         await sdk.deleteMessage('c1', 'm1');
@@ -30,7 +30,7 @@ describe('Emby.deleteMessage()', () => {
         const req = server.lastRequest!;
         assert.equal(req.method, 'PUT');
         assert.equal(req.path, '/api/v1/chats/c1/messages/m1');
-        assert.deepEqual(req.body, { message: { is_deleted: '1' } });
+        assert.deepEqual(req.body, { message: { is_deleted: true } });
     });
 
     test('404 not found', async () => {

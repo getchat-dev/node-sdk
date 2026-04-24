@@ -34,7 +34,7 @@ describe('Emby.addParticipantsToChat()', () => {
 
         await sdk.addParticipantsToChat('c1', [
             { id: 'p1', name: 'Alice' },
-            { id: 'p2', name: 'Bob', email: 'b@x', picture: 'https://p', link: 'https://l' },
+            { id: 'p2', name: 'Bob', email: 'b@x.com', picture: 'https://p', link: 'https://l' },
         ]);
 
         const req = server.lastRequest!;
@@ -43,7 +43,7 @@ describe('Emby.addParticipantsToChat()', () => {
         assert.equal(req.path, '/api/v1/chats/c1/participants');
         assert.deepEqual(body.participants, [
             { id: 'p1', name: 'Alice', is_bot: false },
-            { id: 'p2', name: 'Bob', email: 'b@x', picture: 'https://p', link: 'https://l', is_bot: false },
+            { id: 'p2', name: 'Bob', email: 'b@x.com', picture: 'https://p', link: 'https://l', is_bot: false },
         ]);
     });
 
