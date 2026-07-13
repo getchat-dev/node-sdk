@@ -166,6 +166,19 @@ describe('generated .api.* (openapi-driven, Zod-validated)', () => {
             assert.equal(server.lastRequest!.method, 'PUT');
             assert.equal(server.lastRequest!.path, '/api/v1/chats/c1/typing/u1');
         });
+
+        test('sends ?time=N when the time query param is provided', async () => {
+            server.respondWith(loadFixture('chats/send-typing/success'));
+            await sdk.api.chatSendTyping({ path: { chat_id: 'c1', user_id: 'u1' }, query: { time: 30 } });
+            assert.match(server.lastRequest!.path!, /\/typing\/u1\?time=30$/);
+        });
+
+        test('Zod rejects time above the max (60)', async () => {
+            await assert.rejects(
+                sdk.api.chatSendTyping({ path: { chat_id: 'c1', user_id: 'u1' }, query: { time: 99 } }),
+                (e) => e instanceof ZodError,
+            );
+        });
     });
 
     describe('participant rights', () => {
