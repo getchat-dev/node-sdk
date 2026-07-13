@@ -168,9 +168,9 @@ describe('generated .api.* (openapi-driven, Zod-validated)', () => {
     });
 
     describe('surface', () => {
-        test('.api exposes all 27 operationIds', () => {
+        test('.api exposes all 30 operationIds', () => {
             const names = Object.keys(sdk.api).sort();
-            assert.equal(names.length, 27);
+            assert.equal(names.length, 30);
             for (const expected of [
                 'chatList',
                 'chatCreate',
@@ -179,6 +179,9 @@ describe('generated .api.* (openapi-driven, Zod-validated)', () => {
                 'chatDelete',
                 'chatParticipants',
                 'chatAddParticipants',
+                'chatGetParticipantRights',
+                'chatUpdateParticipantRights',
+                'chatDeleteParticipantRights',
                 'chatDeleteParticipants',
                 'chatMessages',
                 'chatSendMessage',

@@ -37,6 +37,13 @@ const chatListInput = z
 export type ChatListInput = z.infer<typeof chatListInput>;
 
 const chatCreateInput = z.object({
+    query: z
+        .object({
+            with_participants: z.boolean().optional(),
+            result: z.enum(['yes', 'no']).optional(),
+            participants: z.enum(['yes', 'no']).optional(),
+        })
+        .optional(),
     body: z.object({
         chat: z.object({
             id: z.string().max(255),
@@ -64,6 +71,11 @@ const chatUpdateInput = z.object({
     path: z.object({
         chat_id: z.string(),
     }),
+    query: z
+        .object({
+            result: z.enum(['yes', 'no']).optional(),
+        })
+        .optional(),
     body: z.object({
         chat: z
             .object({
@@ -117,6 +129,51 @@ const chatAddParticipantsInput = z.object({
     }),
 });
 export type ChatAddParticipantsInput = z.infer<typeof chatAddParticipantsInput>;
+
+const chatGetParticipantRightsInput = z.object({
+    path: z.object({
+        chat_id: z.string(),
+        user_id: z.string(),
+    }),
+});
+export type ChatGetParticipantRightsInput = z.infer<typeof chatGetParticipantRightsInput>;
+
+const chatUpdateParticipantRightsInput = z.object({
+    path: z.object({
+        chat_id: z.string(),
+        user_id: z.string(),
+    }),
+    body: z.object({
+        send_messages: z.boolean().nullable().optional(),
+        can_press_buttons: z.boolean().nullable().optional(),
+        edit_messages: z.enum(['none', 'my', 'any']).nullable().optional(),
+        delete_messages: z.enum(['none', 'my', 'any']).nullable().optional(),
+        pin_messages: z.enum(['none', 'for_me', 'for_everyone']).nullable().optional(),
+        send_typing: z.boolean().nullable().optional(),
+        send_photos: z.boolean().nullable().optional(),
+        send_voices: z.boolean().nullable().optional(),
+        send_audio: z.boolean().nullable().optional(),
+        send_documents: z.boolean().nullable().optional(),
+        send_location: z.boolean().nullable().optional(),
+        create_pool: z.boolean().nullable().optional(),
+        participate_pool: z.boolean().nullable().optional(),
+        kick_users: z.boolean().nullable().optional(),
+        track_presence: z.boolean().nullable().optional(),
+        track_read_state: z.boolean().nullable().optional(),
+        send_read_state: z.boolean().nullable().optional(),
+        react_messages: z.boolean().nullable().optional(),
+        leave_chats: z.boolean().nullable().optional(),
+    }),
+});
+export type ChatUpdateParticipantRightsInput = z.infer<typeof chatUpdateParticipantRightsInput>;
+
+const chatDeleteParticipantRightsInput = z.object({
+    path: z.object({
+        chat_id: z.string(),
+        user_id: z.string(),
+    }),
+});
+export type ChatDeleteParticipantRightsInput = z.infer<typeof chatDeleteParticipantRightsInput>;
 
 const chatDeleteParticipantsInput = z.object({
     path: z.object({
@@ -180,6 +237,11 @@ const chatUpdateMessageInput = z.object({
         chat_id: z.string(),
         message: z.string(),
     }),
+    query: z
+        .object({
+            result: z.enum(['yes', 'no']).optional(),
+        })
+        .optional(),
     body: z.object({
         message: z
             .object({
@@ -190,7 +252,6 @@ const chatUpdateMessageInput = z.object({
             })
             .optional(),
         update_extra_mode: z.enum(['merge', 'replace']).optional(),
-        return_message: z.boolean().optional(),
     }),
 });
 export type ChatUpdateMessageInput = z.infer<typeof chatUpdateMessageInput>;
@@ -200,6 +261,11 @@ const chatSendTypingInput = z.object({
         chat_id: z.string(),
         user_id: z.string(),
     }),
+    query: z
+        .object({
+            time: z.number().int().min(1).max(60).optional(),
+        })
+        .optional(),
 });
 export type ChatSendTypingInput = z.infer<typeof chatSendTypingInput>;
 
@@ -232,6 +298,11 @@ const chatSetS3CredentialsInput = z.object({
 export type ChatSetS3CredentialsInput = z.infer<typeof chatSetS3CredentialsInput>;
 
 const userCreateInput = z.object({
+    query: z
+        .object({
+            result: z.enum(['yes', 'no']).optional(),
+        })
+        .optional(),
     body: z.object({
         user: z.object({
             id: z.string().max(255),
@@ -259,6 +330,11 @@ const userUpdateInput = z.object({
     path: z.object({
         user_id: z.string(),
     }),
+    query: z
+        .object({
+            result: z.enum(['yes', 'no']).optional(),
+        })
+        .optional(),
     body: z.object({
         user: z
             .object({
@@ -292,6 +368,7 @@ const userChatsInput = z.object({
             order: z.enum(['asc', 'desc']).optional(),
             read: z.boolean().optional(),
             metadata: z.record(z.string(), z.string()).optional(),
+            with_last_message: z.boolean().optional(),
         })
         .optional(),
 });
@@ -404,7 +481,8 @@ export function createOperations(transport: Transport) {
             const parsed = chatCreateInput.parse(input);
             const url = 'chats';
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
-            return transport.requestApi<T>(url, body, 'post');
+            const query = (parsed as { query?: Record<string, unknown> } | undefined)?.query;
+            return transport.requestApi<T>(url, body, 'post', undefined, query);
         },
 
         /** Get chat details */
@@ -419,7 +497,8 @@ export function createOperations(transport: Transport) {
             const parsed = chatUpdateInput.parse(input);
             const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}`;
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
-            return transport.requestApi<T>(url, body, 'put');
+            const query = (parsed as { query?: Record<string, unknown> } | undefined)?.query;
+            return transport.requestApi<T>(url, body, 'put', undefined, query);
         },
 
         /** Delete chat */
@@ -443,6 +522,28 @@ export function createOperations(transport: Transport) {
             const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}/participants`;
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
             return transport.requestApi<T>(url, body, 'post');
+        },
+
+        /** Get participant's per-chat rights */
+        chatGetParticipantRights: async <T = unknown>(input: ChatGetParticipantRightsInput): Promise<T> => {
+            const parsed = chatGetParticipantRightsInput.parse(input);
+            const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}/participants/${String((parsed as { path: Record<string, unknown> }).path['user_id'])}/rights`;
+            return transport.requestApi<T>(url, undefined, 'get');
+        },
+
+        /** Override participant rights for this chat */
+        chatUpdateParticipantRights: async <T = unknown>(input: ChatUpdateParticipantRightsInput): Promise<T> => {
+            const parsed = chatUpdateParticipantRightsInput.parse(input);
+            const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}/participants/${String((parsed as { path: Record<string, unknown> }).path['user_id'])}/rights`;
+            const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
+            return transport.requestApi<T>(url, body, 'put');
+        },
+
+        /** Clear all participant rights for this chat */
+        chatDeleteParticipantRights: async <T = unknown>(input: ChatDeleteParticipantRightsInput): Promise<T> => {
+            const parsed = chatDeleteParticipantRightsInput.parse(input);
+            const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}/participants/${String((parsed as { path: Record<string, unknown> }).path['user_id'])}/rights`;
+            return transport.requestApi<T>(url, undefined, 'delete');
         },
 
         /** Remove participant from chat */
@@ -473,14 +574,16 @@ export function createOperations(transport: Transport) {
             const parsed = chatUpdateMessageInput.parse(input);
             const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}/messages/${String((parsed as { path: Record<string, unknown> }).path['message'])}`;
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
-            return transport.requestApi<T>(url, body, 'put');
+            const query = (parsed as { query?: Record<string, unknown> } | undefined)?.query;
+            return transport.requestApi<T>(url, body, 'put', undefined, query);
         },
 
         /** Send typing indicator */
         chatSendTyping: async <T = unknown>(input: ChatSendTypingInput): Promise<T> => {
             const parsed = chatSendTypingInput.parse(input);
             const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}/typing/${String((parsed as { path: Record<string, unknown> }).path['user_id'])}`;
-            return transport.requestApi<T>(url, undefined, 'put');
+            const query = (parsed as { query?: Record<string, unknown> } | undefined)?.query;
+            return transport.requestApi<T>(url, undefined, 'put', undefined, query);
         },
 
         /** Set chat webhook settings */
@@ -504,7 +607,8 @@ export function createOperations(transport: Transport) {
             const parsed = userCreateInput.parse(input);
             const url = 'users';
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
-            return transport.requestApi<T>(url, body, 'post');
+            const query = (parsed as { query?: Record<string, unknown> } | undefined)?.query;
+            return transport.requestApi<T>(url, body, 'post', undefined, query);
         },
 
         /** Get user details */
@@ -519,7 +623,8 @@ export function createOperations(transport: Transport) {
             const parsed = userUpdateInput.parse(input);
             const url = `users/${String((parsed as { path: Record<string, unknown> }).path['user_id'])}`;
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
-            return transport.requestApi<T>(url, body, 'put');
+            const query = (parsed as { query?: Record<string, unknown> } | undefined)?.query;
+            return transport.requestApi<T>(url, body, 'put', undefined, query);
         },
 
         /** Delete user */

@@ -139,6 +139,11 @@ paths:
       operationId: chat.create
       tags:
         - Chats
+      parameters:
+        - $ref: '#/components/parameters/preferReturnParam'
+        - $ref: '#/components/parameters/withParticipantsParam'
+        - $ref: '#/components/parameters/resultParam'
+        - $ref: '#/components/parameters/participantsResultParam'
       requestBody:
         required: true
         content:
@@ -182,7 +187,15 @@ paths:
                     $ref: '#/components/schemas/ParticipantInput'
       responses:
         '201':
-          description: Chat created successfully
+          description: >-
+            Chat created successfully. `data` is empty unless the client asks
+            for the entity via `Prefer: return=representation`, in which case it
+            contains `chat`; `data.participants` is additionally included when
+            `with_participants=true` is also passed. (Legacy: `?result=yes` and
+            `?participants=yes` still work but are deprecated.)
+          headers:
+            Preference-Applied:
+              $ref: '#/components/headers/PreferenceApplied'
           content:
             application/json:
               schema:
@@ -192,6 +205,10 @@ paths:
                     type: boolean
                   data:
                     type: object
+                    description: >-
+                      Empty by default. Populated only when representation is
+                      requested (and `with_participants=true` for the
+                      participants list).
                     properties:
                       chat:
                         $ref: '#/components/schemas/ChatResource'
@@ -236,6 +253,9 @@ paths:
       operationId: chat.update
       tags:
         - Chats
+      parameters:
+        - $ref: '#/components/parameters/preferReturnParam'
+        - $ref: '#/components/parameters/resultParam'
       requestBody:
         required: true
         content:
@@ -258,7 +278,13 @@ paths:
                         type: string
       responses:
         '200':
-          description: Chat updated
+          description: >-
+            Chat updated. `data` is empty unless the client asks for the entity
+            via `Prefer: return=representation`, in which case it contains the
+            updated `chat`. (Legacy `?result=yes` still works but is deprecated.)
+          headers:
+            Preference-Applied:
+              $ref: '#/components/headers/PreferenceApplied'
           content:
             application/json:
               schema:
@@ -268,6 +294,9 @@ paths:
                     type: boolean
                   data:
                     type: object
+                    description: >-
+                      Empty by default. Populated only when representation is
+                      requested.
                     properties:
                       chat:
                         $ref: '#/components/schemas/ChatResource'
@@ -373,6 +402,126 @@ paths:
       responses:
         '200':
           description: Participants added
+
+  /chats/{chat_id}/participants/{user_id}/rights:
+    parameters:
+      - $ref: '#/components/parameters/chatIdParam'
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: User ID
+    put:
+      summary: Override participant rights for this chat
+      operationId: chat.updateParticipantRights
+      tags:
+        - Chat Participants
+      description: >-
+        Override this participant's rights for this chat only. Every right is
+        optional; a value present sets the override, **fully replacing** the
+        value from the participant's signed link (a chat override can both grant
+        and revoke). An explicit `null` clears the override — the participant
+        falls back to their link value. At least one right must be provided (an
+        empty request is rejected). Changes propagate live over the socket.
+
+
+        Notable rights: `send_messages` — `false` mutes the participant (composer
+        hidden client-side, socket and API reject sends, editing/restoring
+        messages are blocked; deleting own messages stays allowed).
+        `can_press_buttons` — `false` blocks pressing inline message buttons.
+        `pin_messages` — `none` | `for_me` | `for_everyone` (`for_me` currently
+        behaves like `for_everyone`; pins are chat-global).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              description: >-
+                Per-chat right overrides. Booleans accept `true`/`false`/`null`;
+                each key may be omitted. Mirrors the signed-link rights schema.
+              properties:
+                send_messages: { type: boolean, nullable: true }
+                can_press_buttons: { type: boolean, nullable: true }
+                edit_messages: { type: string, nullable: true, enum: [none, my, any] }
+                delete_messages: { type: string, nullable: true, enum: [none, my, any] }
+                pin_messages: { type: string, nullable: true, enum: [none, for_me, for_everyone] }
+                send_typing: { type: boolean, nullable: true }
+                send_photos: { type: boolean, nullable: true }
+                send_voices: { type: boolean, nullable: true }
+                send_audio: { type: boolean, nullable: true }
+                send_documents: { type: boolean, nullable: true }
+                send_location: { type: boolean, nullable: true }
+                create_pool: { type: boolean, nullable: true }
+                participate_pool: { type: boolean, nullable: true }
+                kick_users: { type: boolean, nullable: true }
+                track_presence: { type: boolean, nullable: true }
+                track_read_state: { type: boolean, nullable: true }
+                send_read_state: { type: boolean, nullable: true }
+                react_messages: { type: boolean, nullable: true }
+                leave_chats: { type: boolean, nullable: true }
+      responses:
+        '200':
+          description: Participant updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+        '404':
+          description: User not found in chat
+        '422':
+          description: Validation failed (e.g. no rights provided)
+    get:
+      summary: Get participant's per-chat rights
+      operationId: chat.getParticipantRights
+      tags:
+        - Chat Participants
+      description: >-
+        Returns this participant's per-chat right overrides (the values set via
+        PUT). Absent keys mean they fall back to their signed-link right; an
+        empty object means no overrides are set.
+      responses:
+        '200':
+          description: Participant rights
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                  rights:
+                    type: object
+                    description: Per-chat right overrides (empty when none set).
+                    additionalProperties: true
+        '404':
+          description: User not found in chat
+    delete:
+      summary: Clear all participant rights for this chat
+      operationId: chat.deleteParticipantRights
+      tags:
+        - Chat Participants
+      description: >-
+        Removes ALL per-chat right overrides for this participant (drops the
+        whole rights key), so they fall back entirely to their signed-link
+        rights. Propagates live over the socket.
+      responses:
+        '200':
+          description: Participant rights cleared
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+        '404':
+          description: User not found in chat
 
   /chats/{chat_id}/participants/{user_id}:
     parameters:
@@ -559,6 +708,19 @@ paths:
                     type: array
                     items:
                       type: string
+        '403':
+          description: >-
+            The sending `user` is muted in this chat (`rights.send_messages` is
+            `false`) and cannot post — same policy the socket enforces.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                  message:
+                    type: string
 
   /chats/{chat_id}/messages/{message}:
     parameters:
@@ -574,6 +736,9 @@ paths:
       operationId: chat.updateMessage
       tags:
         - Chat Messages
+      parameters:
+        - $ref: '#/components/parameters/preferReturnParam'
+        - $ref: '#/components/parameters/resultParam'
       requestBody:
         required: true
         content:
@@ -601,12 +766,15 @@ paths:
                 update_extra_mode:
                   type: string
                   enum: [merge, replace]
-                return_message:
-                  type: boolean
-                  description: When true, response includes the updated message body.
       responses:
         '200':
-          description: Message updated
+          description: >-
+            Message updated. `message` is included only when the client asks for
+            the entity via `Prefer: return=representation`. (Legacy `?result=yes`
+            still works but is deprecated.)
+          headers:
+            Preference-Applied:
+              $ref: '#/components/headers/PreferenceApplied'
           content:
             application/json:
               schema:
@@ -633,6 +801,19 @@ paths:
       operationId: chat.sendTyping
       tags:
         - Chat Messages
+      parameters:
+        - name: time
+          in: query
+          required: false
+          description: >-
+            How long (in seconds) recipients should keep showing the typing
+            indicator before it auto-hides. Omit to use the client default (5s).
+            Validation is lenient: a missing, non-integer, or out-of-range value
+            is silently ignored and the client default applies (no error).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 60
       responses:
         '200':
           description: Typing indicator sent
@@ -722,6 +903,9 @@ paths:
       operationId: user.create
       tags:
         - Users
+      parameters:
+        - $ref: '#/components/parameters/preferReturnParam'
+        - $ref: '#/components/parameters/resultParam'
       requestBody:
         required: true
         content:
@@ -759,7 +943,13 @@ paths:
                         type: string
       responses:
         '201':
-          description: User created
+          description: >-
+            User created. `data` is empty unless the client asks for the entity
+            via `Prefer: return=representation`, in which case it contains the
+            created `user`. (Legacy `?result=yes` still works but is deprecated.)
+          headers:
+            Preference-Applied:
+              $ref: '#/components/headers/PreferenceApplied'
           content:
             application/json:
               schema:
@@ -769,6 +959,9 @@ paths:
                     type: boolean
                   data:
                     type: object
+                    description: >-
+                      Empty by default. Populated only when representation is
+                      requested.
                     properties:
                       user:
                         $ref: '#/components/schemas/UserResource'
@@ -809,6 +1002,9 @@ paths:
       operationId: user.update
       tags:
         - Users
+      parameters:
+        - $ref: '#/components/parameters/preferReturnParam'
+        - $ref: '#/components/parameters/resultParam'
       requestBody:
         required: true
         content:
@@ -840,7 +1036,13 @@ paths:
                         type: string
       responses:
         '200':
-          description: User updated
+          description: >-
+            User updated. `data` is empty unless the client asks for the entity
+            via `Prefer: return=representation`, in which case it contains the
+            updated `user`. (Legacy `?result=yes` still works but is deprecated.)
+          headers:
+            Preference-Applied:
+              $ref: '#/components/headers/PreferenceApplied'
           content:
             application/json:
               schema:
@@ -850,6 +1052,9 @@ paths:
                     type: boolean
                   data:
                     type: object
+                    description: >-
+                      Empty by default. Populated only when representation is
+                      requested.
                     properties:
                       user:
                         $ref: '#/components/schemas/UserResource'
@@ -902,6 +1107,15 @@ paths:
             type: object
             additionalProperties:
               type: string
+        - name: with_last_message
+          in: query
+          description: >-
+            Embed each chat's latest message as `last_message`
+            (a MessageResource object).
+          required: false
+          schema:
+            type: boolean
+            default: false
       responses:
         '200':
           description: List of chats
@@ -1222,7 +1436,20 @@ paths:
         - $ref: '#/components/parameters/syncParam'
       responses:
         '200':
-          description: Job dispatched to clear tenant data
+          description: >-
+            Data cleared synchronously. Returned only when `sync=true` — the job
+            runs inline and completes before the response (no `job_id`).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+        '202':
+          description: >-
+            Clear-data job dispatched asynchronously. This is the default when
+            `sync` is not set; the job runs in the background.
           content:
             application/json:
               schema:
@@ -1232,8 +1459,19 @@ paths:
                     type: boolean
                   job_id:
                     type: string
-        '400':
-          description: Data clearing is disabled for this tenant
+        '405':
+          description: >-
+            Data clearing is disabled for this tenant
+            (`api_settings.allow_clear_data` is off).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                  message:
+                    type: string
 
 components:
   schemas:
@@ -1415,6 +1653,12 @@ components:
         last_message_at:
           type: string
           format: date-time
+        last_message:
+          description: >-
+            The chat's most recent message. Present only when requested via
+            `with_last_message=true` (see GET /users/{user_id}/chats).
+          allOf:
+            - $ref: '#/components/schemas/MessageResource'
         owner_id:
           type: string
           description: External owner ID
@@ -1479,6 +1723,17 @@ components:
                 type: string
                 enum: [primary, positive, negative, neutral]
 
+  headers:
+    PreferenceApplied:
+      description: >-
+        Present (as `return=representation`) when the client requested the
+        entity via `Prefer: return=representation` (or the deprecated
+        `?result=yes` flag) and the server honored it. Per RFC 7240.
+      required: false
+      schema:
+        type: string
+        enum: [return=representation]
+
   parameters:
     chatIdParam:
       name: chat_id
@@ -1495,6 +1750,62 @@ components:
       schema:
         type: boolean
       description: force sync execution of method
+
+    preferReturnParam:
+      name: Prefer
+      in: header
+      required: false
+      description: >-
+        RFC 7240 preference controlling whether the affected entity is echoed in
+        the response body. `return=representation` includes the entity under
+        `data`; `return=minimal` (the default) returns only `status`. When
+        representation is applied the response carries a
+        `Preference-Applied: return=representation` header.
+      schema:
+        type: string
+        enum: [return=representation, return=minimal]
+
+    withParticipantsParam:
+      name: with_participants
+      in: query
+      required: false
+      description: >-
+        Include the created participants under `data.participants`. Only takes
+        effect when the entity itself is returned (i.e. together with
+        `Prefer: return=representation`).
+      schema:
+        type: boolean
+        default: false
+
+    resultParam:
+      name: result
+      in: query
+      required: false
+      deprecated: true
+      description: >-
+        DEPRECATED — use the `Prefer: return=representation` header instead.
+        Legacy flag: pass `yes` to include the affected entity in the response
+        `data`. Still honored during the migration window; usage is logged
+        server-side.
+      schema:
+        type: string
+        enum: [yes, no]
+        default: no
+
+    participantsResultParam:
+      name: participants
+      in: query
+      required: false
+      deprecated: true
+      description: >-
+        DEPRECATED — use the `with_participants` query parameter instead.
+        Legacy flag: pass `yes` (together with `result=yes`) to include the
+        created participants in `data.participants`. Still honored during the
+        migration window; usage is logged server-side.
+      schema:
+        type: string
+        enum: [yes, no]
+        default: no
 
     limitParam:
       name: limit

@@ -68,19 +68,6 @@ export const ParticipantResourceSchema = z.object({
 });
 export type ParticipantResource = z.infer<typeof ParticipantResourceSchema>;
 
-export const ChatResourceSchema = z.object({
-    id: z.string(),
-    type: z.enum(['private', 'group', 'supergroup', 'channel']),
-    title: z.string().optional(),
-    created_at: z.iso.datetime({ offset: true }),
-    updated_at: z.iso.datetime({ offset: true }),
-    last_message_at: z.iso.datetime({ offset: true }).optional(),
-    owner_id: z.string().optional(),
-    owner: UserResourceSchema.optional(),
-    metadata: z.record(z.string(), z.string()).optional(),
-});
-export type ChatResource = z.infer<typeof ChatResourceSchema>;
-
 export const MessageResourceSchema = z.object({
     id: z.string(),
     user_id: z.string(),
@@ -106,3 +93,17 @@ export const MessageResourceSchema = z.object({
         .optional(),
 });
 export type MessageResource = z.infer<typeof MessageResourceSchema>;
+
+export const ChatResourceSchema = z.object({
+    id: z.string(),
+    type: z.enum(['private', 'group', 'supergroup', 'channel']),
+    title: z.string().optional(),
+    created_at: z.iso.datetime({ offset: true }),
+    updated_at: z.iso.datetime({ offset: true }),
+    last_message_at: z.iso.datetime({ offset: true }).optional(),
+    last_message: z.unknown().optional(),
+    owner_id: z.string().optional(),
+    owner: UserResourceSchema.optional(),
+    metadata: z.record(z.string(), z.string()).optional(),
+});
+export type ChatResource = z.infer<typeof ChatResourceSchema>;

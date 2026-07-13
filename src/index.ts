@@ -584,9 +584,9 @@ export class Emby {
     }
 
     /**
-     * Wire-format aligned with spec in 1.13: `is_deleted` now boolean (was `'1'` string),
-     * `return_message` now boolean (was `'1'` string). Backend is lenient — both forms
-     * still work — but spec is authoritative going forward.
+     * Wire-format aligned with spec: `is_deleted` is a boolean (was `'1'` string).
+     * `returnMessage` maps to the spec `?result=yes` query flag (RFC 7240 `Prefer`
+     * family); the legacy `return_message` body field was removed from the spec.
      */
     updateMessage<T = unknown>(
         chatId: string,
@@ -617,10 +617,10 @@ export class Emby {
 
         return this.api.chatUpdateMessage<T>({
             path: { chat_id: chatId, message: messageId },
+            query: returnMessage === true ? { result: 'yes' } : undefined,
             body: {
                 message: messageBody,
                 update_extra_mode: replaceExtra === true ? 'replace' : 'merge',
-                ...(returnMessage === true ? { return_message: true } : {}),
             },
         });
     }
