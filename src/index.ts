@@ -809,6 +809,9 @@ export class Emby {
         if (_.isFilledPlainObject(query.metadata)) {
             q.metadata = query.metadata as UserChatsQuery['metadata'];
         }
+        if (_.isBoolean(query.with_last_message)) {
+            q.with_last_message = query.with_last_message;
+        }
         return this.api.userChats<T>({
             path: { user_id: userId },
             query: q as UserChatsQuery,

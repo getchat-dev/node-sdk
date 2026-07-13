@@ -358,6 +358,8 @@ export interface GetUserChatsQuery extends PaginationQuery {
     order?: SortOrder;
     read?: boolean;
     metadata?: StringMap;
+    /** Embed each chat's latest message as `last_message` (a MessageResource). */
+    with_last_message?: boolean;
 }
 
 // ---------------------------------------------------------------------------
