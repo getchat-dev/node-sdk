@@ -13,7 +13,7 @@ Anything edited under `src/` is public surface area — version is bumped in `pa
 
 ## Commands
 
-- `npm test` — runs node's built-in test runner on TS sources via `tsx` (260 tests: 3 unit + 13 integration files). No compilation, tests import from `src/` directly.
+- `npm test` — runs node's built-in test runner on TS sources via `tsx` (273 tests: 3 unit + 13 integration files). No compilation, tests import from `src/` directly.
 - `npm run test:live` — opt-in E2E against a real tenant (needs `.env` with `EMBY_API_TOKEN` + `EMBY_BASE_URL`; 50 tests across happy-path / wire-format regressions / edge cases). Suites skip themselves if creds missing. Runs serially via `--test-concurrency=1` because each `before/after` calls `tenant.clearData({ sync: true })` and parallel suites would race-wipe each other. **Never point at production.** See `test/live/README.md`.
 - `npm run typecheck` — `tsc --noEmit` across src + test.
 - `npm run build` — cleans `dist/`, compiles `tsconfig.cjs.json` → `dist/cjs`, `tsconfig.esm.json` → `dist/esm`, then writes `{"type":"commonjs"}` / `{"type":"module"}` stub `package.json` inside each subdir so Node resolves module kind correctly.
@@ -103,7 +103,7 @@ If you add a new high-level method, the same pattern applies: a thin coercing wr
 `scripts/generate.ts` (~350 LOC) parses `openapi.yml` (via `js-yaml`, devDep) and emits:
 
 - `src/generated/schemas.ts` — one `XSchema` + `type X = z.infer<typeof XSchema>` per `components.schemas.X`. Topologically sorted so `$ref` chains resolve. Components currently shipped: `User`, `UserResource`, `ParticipantResource`, `ParticipantInput`, `ChatResource`, `MessageResource`, `Avatar` (URL-string OR `{kind, color, initials}` placeholder via `oneOf`), `Button` (shared by sendMessage/updateMessage).
-- `src/generated/operations.ts` — `createOperations(transport) → { chatList, chatCreate, chatShow, … }`, **27 methods** (26 chat/user/tenant + `tenantClearData`). Each parses its input with Zod, fills path params into the URL template, and dispatches through `transport.requestApi`.
+- `src/generated/operations.ts` — `createOperations(transport) → { chatList, chatCreate, chatShow, … }`, **30 methods** (29 chat/user/tenant + `tenantClearData`). Each parses its input with Zod, fills path params into the URL template, and dispatches through `transport.requestApi`.
 
 Input shape follows the `openapi-fetch` convention:
 
