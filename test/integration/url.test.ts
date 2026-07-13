@@ -365,6 +365,84 @@ describe('Emby.urlByChatId()', () => {
         assert.equal(qs.signature, expected);
     });
 
+    test('recipient email/picture are signed (ksort order); link is on the wire but NOT signed; is_bot → 0', () => {
+        restore = stubMathRandom([0]);
+        const nonce = predictableNonce('a', 32);
+
+        const out = sdk.urlByChatId('c1', { id: 'u1' }, [
+            { id: 'p1', name: 'Alice', email: 'a@x.com', link: 'https://link', picture: 'https://pic' },
+        ]);
+
+        const qs = parseQuery(out);
+        // Everything the recipient carries reaches the wire...
+        assert.equal(qs['recipients[0][id]'], 'p1');
+        assert.equal(qs['recipients[0][name]'], 'Alice');
+        assert.equal(qs['recipients[0][email]'], 'a@x.com');
+        assert.equal(qs['recipients[0][picture]'], 'https://pic');
+        assert.equal(qs['recipients[0][link]'], 'https://link');
+        // is_bot defaults to false → coerced to integer 0 for the wire (Laravel `boolean` rule).
+        assert.equal(qs['recipients[0][is_bot]'], '0');
+
+        // ...but the signature only includes appendLegacy's recipient whitelist
+        // [id,name,email,picture], ksorted alphabetically (email < id < name < picture),
+        // so `link` and `is_bot` are excluded from the MD5 input.
+        const expected = crypto
+            .createHash('md5')
+            .update([CONFIG.secret, nonce, 'u1', 'a@x.com', 'p1', 'Alice', 'https://pic', 'c1'].join(','))
+            .digest('hex');
+        assert.equal(qs.signature, expected);
+    });
+
+    test('user.link is excluded from the legacy signature (and stripped from the wire)', () => {
+        restore = stubMathRandom([0]);
+        const nonce = predictableNonce('a', 32);
+
+        const out = sdk.urlByChatId('c1', {
+            id: 'u1',
+            name: 'U',
+            email: 'u@x.com',
+            picture: 'https://upic',
+            link: 'https://ulink',
+        });
+
+        const qs = parseQuery(out);
+        assert.equal(qs['user[email]'], 'u@x.com');
+        assert.equal(qs['user[picture]'], 'https://upic');
+        // `link` is not in normalizeData's user whitelist → dropped before it can reach the wire.
+        assert.equal(qs['user[link]'], undefined);
+
+        // Signature = user [email,id,name,picture] (ksorted), then chat [id]. No link anywhere.
+        const expected = crypto
+            .createHash('md5')
+            .update([CONFIG.secret, nonce, 'u@x.com', 'u1', 'U', 'https://upic', 'c1'].join(','))
+            .digest('hex');
+        assert.equal(qs.signature, expected);
+    });
+
+    test('chat.list is stripped by normalizeChat (never reaches wire or signature)', () => {
+        restore = stubMathRandom([0]);
+        const nonce = predictableNonce('a', 32);
+
+        // `list` is in appendLegacy's chat whitelist but NOT in normalizeChat's, so it is
+        // dropped before signing — the appendLegacy 'list' entry is currently unreachable
+        // via the public API. This test guards normalizeChat against accidentally passing it.
+        const out = sdk.urlByChatId({ id: 'c1', title: 'T', list: 'x' } as unknown as { id: string; title: string }, {
+            id: 'u1',
+        });
+
+        const qs = parseQuery(out);
+        assert.equal(qs['chat[id]'], 'c1');
+        assert.equal(qs['chat[title]'], 'T');
+        assert.equal(qs['chat[list]'], undefined);
+
+        // Signature = user [id], then chat [id,title] ksorted. No `list`.
+        const expected = crypto
+            .createHash('md5')
+            .update([CONFIG.secret, nonce, 'u1', 'c1', 'T'].join(','))
+            .digest('hex');
+        assert.equal(qs.signature, expected);
+    });
+
     test('extra keys merged into query but not into signature', () => {
         restore = stubMathRandom([0]);
         const nonce = predictableNonce('a', 32);
