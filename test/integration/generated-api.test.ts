@@ -7,6 +7,7 @@ import { type MockServer, startMockServer } from '../helpers/mockServer';
 import { makeSdk } from '../helpers/sdkFactory';
 
 type JsonBody = Record<string, unknown>;
+type HttpErr = Error & { status?: number };
 
 describe('generated .api.* (openapi-driven, Zod-validated)', () => {
     let server: MockServer;
@@ -164,6 +165,59 @@ describe('generated .api.* (openapi-driven, Zod-validated)', () => {
             await sdk.api.chatSendTyping({ path: { chat_id: 'c1', user_id: 'u1' } });
             assert.equal(server.lastRequest!.method, 'PUT');
             assert.equal(server.lastRequest!.path, '/api/v1/chats/c1/typing/u1');
+        });
+    });
+
+    describe('participant rights', () => {
+        test('chatGetParticipantRights: GET /chats/{chat_id}/participants/{user_id}/rights', async () => {
+            server.respondWith({ status: 200, body: { status: true, rights: { send_messages: false } } });
+            const r = await sdk.api.chatGetParticipantRights<{ rights: Record<string, unknown> }>({
+                path: { chat_id: 'c1', user_id: 'u1' },
+            });
+            assert.equal(server.lastRequest!.method, 'GET');
+            assert.equal(server.lastRequest!.path, '/api/v1/chats/c1/participants/u1/rights');
+            assert.deepEqual(r.rights, { send_messages: false });
+        });
+
+        test('chatUpdateParticipantRights: PUT rights body (nullable values pass through)', async () => {
+            server.respondWith({ status: 200, body: { status: true } });
+            await sdk.api.chatUpdateParticipantRights({
+                path: { chat_id: 'c1', user_id: 'u1' },
+                body: { send_messages: false, pin_messages: 'for_everyone', can_press_buttons: null },
+            });
+            const req = server.lastRequest!;
+            assert.equal(req.method, 'PUT');
+            assert.equal(req.path, '/api/v1/chats/c1/participants/u1/rights');
+            assert.deepEqual(req.body, {
+                send_messages: false,
+                pin_messages: 'for_everyone',
+                can_press_buttons: null,
+            });
+        });
+
+        test('chatUpdateParticipantRights: Zod rejects an invalid enum right', async () => {
+            await assert.rejects(
+                sdk.api.chatUpdateParticipantRights({
+                    path: { chat_id: 'c1', user_id: 'u1' },
+                    body: { edit_messages: 'bogus' as 'any' },
+                }),
+                (e) => e instanceof ZodError,
+            );
+        });
+
+        test('chatUpdateParticipantRights: backend 422 (no rights provided) rejects', async () => {
+            server.respondWith({ status: 422, body: { status: false, message: 'no rights' } });
+            await assert.rejects(
+                sdk.api.chatUpdateParticipantRights({ path: { chat_id: 'c1', user_id: 'u1' }, body: {} }),
+                (e) => (e as HttpErr).status === 422,
+            );
+        });
+
+        test('chatDeleteParticipantRights: DELETE /chats/{chat_id}/participants/{user_id}/rights', async () => {
+            server.respondWith({ status: 200, body: { status: true } });
+            await sdk.api.chatDeleteParticipantRights({ path: { chat_id: 'c1', user_id: 'u1' } });
+            assert.equal(server.lastRequest!.method, 'DELETE');
+            assert.equal(server.lastRequest!.path, '/api/v1/chats/c1/participants/u1/rights');
         });
     });
 
