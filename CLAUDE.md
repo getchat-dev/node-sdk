@@ -18,7 +18,7 @@ Anything edited under `src/` is public surface area — version is bumped in `pa
 - `npm run typecheck` — `tsc --noEmit` across src + test.
 - `npm run build` — cleans `dist/`, compiles `tsconfig.cjs.json` → `dist/cjs`, `tsconfig.esm.json` → `dist/esm`, then writes `{"type":"commonjs"}` / `{"type":"module"}` stub `package.json` inside each subdir so Node resolves module kind correctly.
 - `npm run coverage:ci` — runs tests with `--experimental-test-coverage` and gates at 90% (see `scripts/coverage-gate.js`; threshold is 90%, not 100%, because TS emit introduces unavoidable compiler-prelude "uncovered" lines).
-- `npm run generate` — regenerates `src/generated/{schemas,operations}.ts` from `openapi.yml`. Commit the output.
+- `npm run generate` — regenerates `src/generated/{schemas,operations}.ts` from `openapi.yml`, then Biome-formats them (the script chains `&& npm run format` — the raw codegen emits double-quoted keys that Biome normalizes to the project's single-quote style). Commit the output.
 - `npm run check` / `check:fix` — Biome lint+format.
 
 Smoke-verifying a change without a real backend: run the relevant test file (`node --test --import tsx 'test/integration/<name>.test.ts'`) or start the mock server via `test/helpers/mockServer.ts`.
@@ -152,7 +152,7 @@ When you change `openapi.yml`, run `npm run generate` then `npm test` then `npm 
 ### Adding a new API method
 
 1. Edit `openapi.yml` — add the path + operation with a unique `operationId` (e.g. `chat.archive` → `chatArchive`).
-2. `npm run generate` — regenerates `src/generated/*`.
+2. `npm run generate` — regenerates `src/generated/*` (and Biome-formats them; the script chains `npm run format`).
 3. `npm test` — ensure existing tests still pass; the new method appears as `sdk.api.chatArchive(...)` with full types.
 4. Optionally add an integration test under `test/integration/generated-api.test.ts`. If you want a lenient public signature on the `Emby` class, add a thin coercing wrapper that delegates to `this.api.chatArchive(...)`.
 5. If you have live creds, also run `npm run test:live` to confirm the backend really accepts what the spec says.
