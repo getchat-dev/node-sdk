@@ -1,97 +1,70 @@
-# emby-node-sdk
-EMBY SDK for Node
+# @emby-chat/node-sdk
 
-## Getting Started
-### Installation
+Server-side Node SDK for [GetChat](https://getchat.dev) (the product was originally called "Emby" — the npm package and `Emby` class still use that name).
+
+Two responsibilities:
+
+1. **Sign chat URLs** for embedding the chat UI in an iframe / WebView (`url`, `urlByChatId`).
+2. **Wrap the GetChat REST API** with two parallel surfaces:
+   - **Hand-written high-level methods** (`sendMessage`, `getChats`, `addParticipantsToChat`, etc.) — lenient, backwards-compatible, accept loose input shapes.
+   - **Auto-generated `.api.*` methods** — one per `operationId` in `openapi.yml`, strict Zod-validated input, openapi-fetch-style `{ path, query, body }` shape.
+
+Both surfaces ultimately go through the same `requestApi` transport. As of 1.13 the high-level methods are thin adapters over `.api.*`.
+
+The package publishes **dual CJS + ESM** from `dist/`. TypeScript types ship.
+
+---
+
+## Installation
 
 ```bash
 npm install @emby-chat/node-sdk
-```
-or
-```bash
+# or
 yarn add @emby-chat/node-sdk
 ```
 
-### Configuration
-```javascript
-    const Emby = require('@emby-chat/node-sdk');
+## Configuration
 
-    const emby = new Emby({
-        id: 'your id',
-        secret: 'your secret key',
-        api_token: 'your api token',
-        base_url: 'https://app.getchat.dev/'
-    });
+ESM / TypeScript:
+```ts
+import { Emby } from '@emby-chat/node-sdk';
+
+const emby = new Emby({
+    id: 'your client id',
+    secret: 'your client secret',
+    api_token: 'your api token',
+    base_url: 'https://app.getchat.dev',
+});
 ```
 
-### Methods
+CommonJS:
+```js
+const { Emby } = require('@emby-chat/node-sdk');
 
-#### deleteChat
-```javascript
-/**
- * Delete chat
- *
- * @param {string} chatId - The unique identifier for the chat. This parameter is required.
- * 
- * @returns {Promise<Object>} A promise that resolves to the response of the update message action.
- */
-```
-```javascript
-emby.deleteChat(chatId);
+const emby = new Emby({
+    id: 'your client id',
+    secret: 'your client secret',
+    api_token: 'your api token',
+    base_url: 'https://app.getchat.dev',
+});
 ```
 
-#### url
+---
 
-```javascript
-/**
-* Generate a chat URL.
-*
-* @param {Object} options - The options object containing all parameters.
-* @param {Object} [options.chat] - The chat object containing chat details. This parameter is required.
-* @param {string} [options.chat.id] - The unique identifier for the chat. This parameter is required.
-* @param {string} [options.chat.title] - The title of the chat.
-* @param {Object} options.user - The user object containing user details. This parameter is required.
-* @param {string} options.user.id - The unique identifier for the user.
-* @param {string} [options.user.name] - The name of the user.
-* @param {string} [options.user.email] - The email of the user.
-* @param {string} [options.user.picture] - The picture URL of the user.
-* @param {string} [options.user.link] - The link associated with the user.
-* @param {Object} [options.user.rights] - The rights object containing user permissions.
-* @param {boolean} [options.user.rights.send_messages=true] - Enable or disable sending messages.
-* @param {("none"|"my"|"any")} [options.user.rights.edit_messages="my"] - Permission to edit messages.
-* @param {("none"|"my"|"any")} [options.user.rights.delete_messages="my"] - Permission to delete messages.
-* @param {("none"|"for_me"|"for_everyone")} [options.user.rights.pin_messages="for_me"] - Permission to pin messages.
-* @param {boolean} [options.user.rights.send_photos=false] - Enable or disable sending photos.
-* @param {boolean} [options.user.rights.send_audio=false] - Enable or disable sending audio.
-* @param {boolean} [options.user.rights.send_documents=false] - Enable or disable sending documents.
-* @param {boolean} [options.user.rights.send_location=false] - Enable or disable sending location.
-* @param {boolean} [options.user.rights.create_pools=false] - Enable or disable creating pools.
-* @param {boolean} [options.user.rights.vote_pool=false] - Enable or disable voting in pools.
-* @param {boolean} [options.user.rights.kick_users=false] - Enable or disable kicking users.
-* @param {Object[]} [options.recipients=[]] - An array of recipient objects.
-* @param {string} options.recipients[].id - The unique identifier for the recipient.
-* @param {string} options.recipients[].name - The name of the recipient.
-* @param {boolean} [options.recipients[].is_bot=false] - Indicates if the recipient is a bot.
-* @param {Object} [options.extra={}] - Additional options.
-* @param {Object} [options.extra.skin_options] - Skin options for the chat interface.
-* @param {boolean} [options.extra.skin_options.display_header=true] - Show or hide header.
-* @param {boolean} [options.extra.skin_options.display_network_pane=true] - Show or hide network pane (only works for default skin).
-* @param {boolean} [options.extra.skin_options.hide_day_delimiter=false] - Hide date delimiter.
-* @param {boolean} [options.extra.skin_options.hide_deleted_message=false] - If true, deleted messages won't be displayed.
-* @param {number} [options.extra.skin_options.message_max_length=0] - Set limit for input message length (0 means no limit).
-* @param {("en"|"pt"|"ru")} [options.extra.skin_options.lang="en"] - Set language for skin.
-* 
-* @returns {string} The generated chat URL.
-*/
-```
-```javascript
+## URL signing
+
+### `url(options)` — HMAC-SHA256 signed URL
+
+Used to mint a per-user chat URL embedding owner / chat / participants / rights into the query, signed with `clientSecret`.
+
+```js
 emby.url({
     chat: {
         id: 'some_unique_string',
-        title: 'The name of the chat'
+        title: 'The name of the chat',
     },
     user: {
-        id: 10001,
+        id: '10001',
         name: 'Howard Lovecraft',
         picture: 'https://via.placeholder.com/400',
         rights: {
@@ -101,394 +74,403 @@ emby.url({
             send_messages: true,
             pin_messages: 'for_everyone',
             send_read_state: true,
-        }
+        },
     },
+    participants: [
+        { id: 'p1', name: 'Alice' },
+    ],
     extra: {
-        'skin': 'default',
-        'skin_options': {
-            'display_header': true,
-            'hide_day_delimiter': true,
-            'message_max_length': 150,
-        }
-    }
-})
+        skin: 'default',
+        skin_options: {
+            display_header: true,
+            hide_day_delimiter: true,
+            message_max_length: 150,
+        },
+    },
+});
 ```
 
-#### urlByChatId
-```javascript
+JSDoc shape:
+```js
 /**
- * Generate a chat URL by chat ID.
- *
- * @param {Object} chat - The chat object containing chat details. This parameter is required.
- * @param {string} chat.id - The unique identifier for the chat. This parameter is required.
- * @param {string} chat.title - The title of the chat.
- * @param {Object} user - The user object containing user details. This parameter is required.
- * @param {string} user.id - The unique identifier for the user.
- * @param {string} user.name - The name of the user.
- * @param {string} [user.email] - The email of the user.
- * @param {string} [user.picture] - The picture URL of the user.
- * @param {string} [user.link] - The link associated with the user.
- * @param {Object} [user.rights] - The rights object containing user permissions.
- * @param {boolean} [user.rights.send_messages=true] - Enable or disable sending messages.
- * @param {("none"|"my"|"any")} [user.rights.edit_messages="my"] - Permission to edit messages.
- * @param {("none"|"my"|"any")} [user.rights.delete_messages="my"] - Permission to delete messages.
- * @param {("none"|"for_me"|"for_everyone")} [user.rights.pin_messages="for_me"] - Permission to pin messages.
- * @param {boolean} [user.rights.send_photos=false] - Enable or disable sending photos.
- * @param {boolean} [user.rights.send_audio=false] - Enable or disable sending audio.
- * @param {boolean} [user.rights.send_documents=false] - Enable or disable sending documents.
- * @param {boolean} [user.rights.send_location=false] - Enable or disable sending location.
- * @param {boolean} [user.rights.create_pools=false] - Enable or disable creating pools.
- * @param {boolean} [user.rights.vote_pool=false] - Enable or disable voting in pools.
- * @param {boolean} [user.rights.kick_users=false] - Enable or disable kicking users.
- * @param {Object[]} [recipients=[]] - An array of recipient objects.
- * @param {string} recipients[].id - The unique identifier for the recipient.
- * @param {string} recipients[].name - The name of the recipient.
- * @param {boolean} [recipients[].is_bot=false] - Indicates if the recipient is a bot.
- * @param {Object} [extra={}] - Additional options.
- * @param {Object} [extra.skin_options] - Skin options for the chat interface.
- * @param {boolean} [extra.skin_options.display_header=true] - Show or hide header.
- * @param {boolean} [extra.skin_options.display_network_pane=true] - Show or hide network pane (only works for default skin).
- * @param {boolean} [extra.skin_options.hide_day_delimiter=false] - Hide date delimiter.
- * @param {boolean} [extra.skin_options.hide_deleted_message=false] - If true, deleted messages won't be displayed.
- * @param {number} [extra.skin_options.message_max_length=0] - Set limit for input message length (0 means no limit).
- * @param {("en"|"pt"|"ru")} [extra.skin_options.lang="en"] - Set language for skin.
- * 
- * @returns {string} The generated chat URL.
+ * @param {Object}   options
+ * @param {Object|string|null} [options.chat]            Chat details (or string id, or null for no chat).
+ * @param {Object}   options.user                         The user the URL is being generated for. REQUIRED.
+ * @param {string}   options.user.id                      Stable user id (used in signature).
+ * @param {string}   [options.user.name]
+ * @param {string}   [options.user.email]
+ * @param {string}   [options.user.picture]
+ * @param {string}   [options.user.link]
+ * @param {Object}   [options.user.rights]                Per-right map (see "User rights" below).
+ * @param {Object[]} [options.participants=[]]            Recipients added to the conversation.
+ * @param {string}   options.participants[].id
+ * @param {string}   [options.participants[].name]
+ * @param {boolean}  [options.participants[].is_bot=false]
+ * @param {Object}   [options.extra={}]                   Pass-through query keys (e.g. skin_options).
+ * @returns {string}                                      Signed chat URL.
  */
 ```
 
-##### available user rights
-```javascripton
-{
-    "$schema": "https://json-schema.org/draft-07/schema",
-    "type": "object",
-    "properties": {
-        "send_messages": {
-            "type": "boolean",
-            "default": true,
-            "description": "Enable or disable sending messages"
-        },
-        "edit_messages": {
-            "type": "string",
-            "enum": ["none", "my", "any"],
-            "default": "my",
-            "description": "Permission to edit messages (none, my, any)"
-        },
-        "delete_messages": {
-            "type": "string",
-            "enum": ["none", "my", "any"],
-            "default": "my",
-            "description": "Permission to delete messages (none, my, any)"
-        },
-        "pin_messages": {
-            "type": "string",
-            "enum": ["none", "for_me", "for_everyone"],
-            "default": "for_me",
-            "description": "Permission to pin messages (none, for_me, for_everyone)"
-        },
-        "send_photos": {
-            "type": "boolean",
-            "default": false,
-            "description": "Enable or disable sending photos"
-        },
-        "send_audio": {
-            "type": "boolean",
-            "default": false,
-            "description": "Enable or disable sending audio"
-        },
-        "send_documents": {
-            "type": "boolean",
-            "default": false,
-            "description": "Enable or disable sending documents"
-        },
-        "send_location": {
-            "type": "boolean",
-            "default": false,
-            "description": "Enable or disable sending location"
-        },
-        "create_pools": {
-            "type": "boolean",
-            "default": false,
-            "description": "Enable or disable creating pools"
-        },
-        "vote_pool": {
-            "type": "boolean",
-            "default": false,
-            "description": "Enable or disable voting in pools"
-        },
-        "kick_users": {
-            "type": "boolean",
-            "default": false,
-            "description": "Enable or disable kicking users"
-        }
+### `urlByChatId(chat, user, participants?, extra?)` — MD5 signed URL (legacy)
+
+Older signing scheme kept for backward compatibility. Signs with MD5 of `[clientSecret, nonce, …]`. Does **not** include `user.rights` in the signature itself (rights still pass through into the URL query).
+
+```js
+// Auth user
+emby.urlByChatId('chatId10', { id: '10', name: 'User Name' });
+
+// Auth user with avatar
+emby.urlByChatId('chatId10', { id: '10', name: 'User Name', picture: 'https://avatar.url/me.jpg' });
+
+// Anonymous (guest) user
+emby.urlByChatId('chatId10', { name: 'Custom Guest Name', session: 'YOUR_SESSION_ID' });
+
+// With skin / language options
+emby.urlByChatId('chatId10', { id: '10', name: 'User Name' }, [], {
+    skin: 'default',
+    skin_options: {
+        hide_deleted_message: true,
+        lang: 'pt',
     },
-    "required": [
-        "send_messages",
-        "edit_messages",
-        "delete_messages",
-        "pin_messages",
-        "send_photos",
-        "send_audio",
-        "send_documents",
-        "send_location",
-        "create_pools",
-        "vote_pool",
-        "kick_users"
-    ]
-}
-```
-
-So you can specify options for some rights.
-For instance edit_messages right can have an additional option "extra" (edit_messages:extra).
-It's means that user can edit not only a text, but also an extra options
-
-
-##### available skin_options
-```javascripton
-{
-    "$schema": "http://json-schema.org/draft-07/schema#",
-    "type": "object",
-    "properties": {
-        "display_header": {
-            "type": "boolean",
-            "default": true,
-            "description": "Show or hide header"
-        },
-        "display_network_pane": {
-            "type": "boolean",
-            "default": true,
-            "description": "Show or hide network pane (only works for default skin)"
-        },
-        "hide_day_delimiter": {
-            "type": "boolean",
-            "default": false,
-            "description": "Hide date delimiter"
-        },
-        "hide_deleted_message": {
-            "type": "boolean",
-            "default": false,
-            "description": "If true, deleted messages won't be displayed"
-        },
-        "message_max_length": {
-            "type": "integer",
-            "default": 0,
-            "description": "Set limit for input message length (0 means no limit)"
-        },
-        "lang": {
-            "type": "string",
-            "enum": ["en", "pt", "ru"],
-            "default": "en",
-            "description": "Set language for skin"
-        }
-    },
-    "required": [
-        "display_header",
-        "display_network_pane",
-        "hide_day_delimiter",
-        "hide_deleted_message",
-        "message_max_length",
-        "lang"
-    ]
-}
-```
-
-generate chat url for unauth user
-
-```javascript
-emby.urlByChatId('user10', {session: 'YOUR_SESSION_ID'});
-```
-generate chat url for unauth user with custom name
-```javascript
-emby.urlByChatId('user10', {name: 'Custom Name for Guest User', session: 'YOUR_SESSION_ID'});
-```
-generate chat url for auth user
-```javascript
-emby.urlByChatId('user10', {id: '10', name: 'User Name'});
-```
-generate chat url for auth user with avatar
-```javascript
-emby.urlByChatId('user10', {id: '10', name: 'User Name', avatar: 'source to avatar'});
-```
-generate chat url for auth user with options
-```javascript
-emby.urlByChatId('user10', {id: '10', name: 'User Name'}, [], {
-    'skin': 'default',
-    'skin_options': {
-        'hideDeletedMessage' => true
-    }
 });
-```
-generate chat url with Portuguese language
-```javascript
-emby.urlByChatId('user10', {id: '10', name: 'User Name'}, [], {
-    'skin': 'default',
-    'skin_options': {
-        'hideDeletedMessage' => true,
-        'lang' => 'pt'
-    }
-});
-```
 
-generate chat url for auth user with right to edit myself messages
-```javascript
-emby.urlByChatId('chatId10',
+// With per-user rights
+emby.urlByChatId(
+    'chatId10',
     {
         id: '10',
         name: 'User Name',
         rights: {
-            edit_messages: 'my:extra'
-        }
-    }, [], {
-        'skin': 'default',
-        'skin_options': {
-            'hideDeletedMessage' => true
-        }
-    }
+            edit_messages: 'my:extra',
+        },
+    },
+    [],
+    {
+        skin: 'default',
+        skin_options: { hide_deleted_message: true },
+    },
 );
 ```
 
-####  sendMessage
-```javascript
+### User rights
+
+Defined in `src/libs/rights.scheme.ts`. Boolean rights accept truthy strings (`'on'`, `'yes'`, `'1'`, `'true'`) and are normalized to `'1'` / `'0'`. Enum rights accept the listed values; values may carry a `:`-separated suffix (e.g. `'my:extra'`) — the suffix is preserved in the URL but only the head is validated.
+
+```jsonc
+{
+    // booleans
+    "send_messages":     { "type": "boolean" },
+    "react_messages":    { "type": "boolean" },
+    "can_press_buttons": { "type": "boolean" },
+    "send_typing":       { "type": "boolean" },
+    "track_presence":    { "type": "boolean" },
+    "send_photos":       { "type": "boolean" },
+    "send_voices":       { "type": "boolean" },
+    "send_audio":        { "type": "boolean" },
+    "send_documents":    { "type": "boolean" },
+    "send_location":     { "type": "boolean" },
+    "create_pool":       { "type": "boolean" },
+    "participate_pool":  { "type": "boolean" },
+    "kick_users":        { "type": "boolean" },
+    "track_read_state":  { "type": "boolean" },
+    "send_read_state":   { "type": "boolean" },
+    "leave_chats":       { "type": "boolean" },
+
+    // enums (suffix after `:` allowed, e.g. "my:extra")
+    "edit_messages":     { "type": "enum", "values": ["none", "my", "any"] },
+    "delete_messages":   { "type": "enum", "values": ["none", "my", "any"] },
+    "pin_messages":      { "type": "enum", "values": ["none", "for_me", "for_everyone"] }
+}
+```
+
+### Skin options (iframe display)
+
+```jsonc
+{
+    "display_header":       { "type": "boolean", "default": true  },
+    "display_network_pane": { "type": "boolean", "default": true  },
+    "hide_day_delimiter":   { "type": "boolean", "default": false },
+    "hide_deleted_message": { "type": "boolean", "default": false },
+    "message_max_length":   { "type": "integer", "default": 0     },
+    "lang":                 { "type": "string",  "enum": ["en", "pt", "ru"], "default": "en" }
+}
+```
+
+---
+
+## High-level chat methods
+
+All return `Promise`. Errors reject with `Error & { status: number; body: unknown }` — `body` carries the parsed JSON response from the backend.
+
+### `getChats(query?)`
+```ts
+emby.getChats({ page: 1, limit: 50, type: 'group', with_owners: true })
+    .then((r) => console.log(r.chats));
+```
+Lenient input: `with_owners` accepts `true | 'yes' | 'on' | 1`; coerced to spec `0|1` integer wire. Pagination is clamped to `[1, 1000]`.
+
+### `getChatInfo(chatId)`
+```ts
+const info = await emby.getChatInfo('chat_id');
+```
+Throws `"chat id isn't passed"` for non-strings.
+
+### `getMessagesFromChat(chatId, query?, page?, limit?)`
+```ts
+await emby.getMessagesFromChat('chat_id', { with_users: true, isDeleted: false }, 1, 100);
+```
+Accepts both spec `with_users` (snake_case) and legacy `withUsers` (camelCase) field names; the wire is always `with_users=1` (spec). `isDeleted` / `isEdited` accept smart-booleans (`'yes'`/`'on'`), coerced to integer wire.
+
+### `sendMessage(chat, user, participants, message, extra?, buttons?)`
+```ts
+emby.sendMessage(
+    'chat_id',                              // string or { id, title?, type?, metadata? }
+    { id: 'user_id', name: 'User Name' },  // sender (required)
+    [],                                     // participants for new chats; ignored on existing chats
+    'Hello world',                          // string or { text, recipient_id? }
+    { source: 'cli' },                      // optional extra metadata
+    [{ label: 'OK', action: 'ok', type: 'local' }], // optional buttons
+).then((r) => console.log('message ids:', r.message_ids));
+```
+
+JSDoc shape:
+```js
 /**
- * Send a message to a chat.
- *
- * @param {string} chatId - The unique identifier for the chat. This parameter is required.
- * @param {Object} user - The user object sending the message. This parameter is required.
- * @param {string} user.id - The unique identifier for the user.
- * @param {string} [user.name] - The name of the user.
- * @param {string} [user.email] - The email of the user.
- * @param {string} [user.picture] - The picture URL of the user.
- * @param {string} [user.link] - The link associated with the user.
- * @param {Object[]} [recipients] - An array of recipient objects..
- * @param {string} recipients[].id - The unique identifier for the recipient.
- * @param {string} recipients[].name - The name of the recipient.
- * @param {string} [recipients[].email] - The name of the recipient.
- * @param {string} [recipients[].picture] - The name of the recipient.
- * @param {string} [recipients[].link] - The name of the recipient.
- * @param {boolean} [recipients[].is_bot=false] - Indicates if the recipient is a bot.
- * @param {string} message - The message content to be sent. This parameter is required.
- * @param {Object[]} [extra=[]] - Additional options for the message.
- * @param {Object[]} [buttons=[]] - An array of button objects to be included with the message.
- * @param {string} buttons[].label - The label of the button. This parameter is required.
- * @param {string} buttons[].action - The action associated with the button. This parameter is required.
- * @param {string} buttons[].type - The type of the button (local or remote). This parameter is required.
- * @param {string} [buttons[].style] - The style of the button.
- * 
- * @returns {Promise<Object>} A promise that resolves to the response of the send message action.
+ * @param {Object|string} chat                  Chat object or chat id string.
+ * @param {string}        chat.id               Required when chat is an object.
+ * @param {string}        [chat.title]          Used when creating a new chat.
+ * @param {string}        [chat.type]           private | group | supergroup | channel.
+ * @param {Object}        [chat.metadata]
+ * @param {Object}        user                  Sender. REQUIRED.
+ * @param {string}        user.id
+ * @param {string}        [user.name]
+ * @param {string}        [user.email]
+ * @param {string}        [user.picture]
+ * @param {string}        [user.link]
+ * @param {Object[]}      [participants]        For new-chat creation only; ignored when chat already exists.
+ * @param {string}        participants[].id
+ * @param {string}        [participants[].name]
+ * @param {boolean}       [participants[].is_bot=false]
+ * @param {string|Object} message               String text, or { text, recipient_id? }.
+ * @param {Object}        [extra={}]            Extra string-map merged into the message body.
+ * @param {Object[]}      [buttons=[]]          Inline action buttons (max 4).
+ * @returns {Promise<{ status: boolean, message_ids: string[] }>}
  */
 ```
-```javascript
-emby
-    .sendMessage('chat_id', {
-        'id': userId,
-        'name': userName
-    }, [], message)
-    .then(response => {
-        console.info('message was successfully sent', response);
-    })
-    .catch(e => {
-        console.error(e.message);
-    });
+
+### `updateMessage(chatId, messageId, updateData, options?)`
+```ts
+await emby.updateMessage('chat_id', 'message_id', {
+    text: 'edited text',
+    extra: { tag: 'pinned' },
+});
+
+// Soft-delete via update
+await emby.updateMessage('chat_id', 'message_id', { isDeleted: true });
 ```
-####  updateMessage
-```javascript
+
+JSDoc shape:
+```js
 /**
- * Update a message in a chat.
- *
- * @param {string} chatId - The unique identifier for the chat. This parameter is required.
- * @param {string} messageId - The unique identifier for the message. This parameter is required.
- * @param {Object} updateData - The data to update the message with. This parameter is required.
- * @param {string} updateData.text - The new text content of the message.
- * @param {boolean} [updateData.isDeleted=false] - Flag indicating if the message is deleted.
- * @param {Object} [updateData.extra={}] - Additional options for the message.
- * @param {Object[]} [updateData.buttons=[]] - An array of button objects to be included with the message.
- * @param {string} updateData.buttons[].label - The label of the button. This parameter is required.
- * @param {string} updateData.buttons[].action - The action associated with the button. This parameter is required.
- * @param {string} [updateData.buttons[].type] - The type of the button (local or remote).
- * @param {string} [updateData.buttons[].style] - The style of the button.
- * @param {Object} [options={}] - Additional options for the update operation.
- * @param {boolean} [options.replaceExtra=false] - Flag to replace the existing extra options with the new ones.
- * @param {boolean} [options.returnMessage=false] - Flag to return the updated message.
- * 
- * @returns {Promise<Object>} A promise that resolves to the response of the update message action.
+ * @param {string}   chatId                          REQUIRED.
+ * @param {string}   messageId                       REQUIRED.
+ * @param {Object}   updateData
+ * @param {string}   [updateData.text]
+ * @param {boolean}  [updateData.isDeleted=false]    Soft-delete the message (wire is `is_deleted: true`).
+ * @param {Object}   [updateData.extra={}]           Extra string-map. Merge by default; replace via options.
+ * @param {Object[]} [updateData.buttons=[]]
+ * @param {Object}   [options]
+ * @param {boolean}  [options.replaceExtra=false]    `extra` mode: `merge` (default) or `replace`.
+ * @param {boolean}  [options.returnMessage=false]   When true, response includes the updated message body.
  */
 ```
-```javascript
-emby.updateMessage(messageId, {
-    text: "Change the message text to so-and-so",
-    extra: {
-        someParameter: 'someValue'
-    }
+
+### `deleteMessage(chatId, messageId)`
+```ts
+await emby.deleteMessage('chat_id', 'message_id');
+```
+Convenience wrapper for `updateMessage` with `{ isDeleted: true }`. Wire body is `{ message: { is_deleted: true } }` (boolean per spec, was `'1'` string before 1.13).
+
+### `sendTyping(chatId, userId)`
+```ts
+await emby.sendTyping('chat_id', 'user_id');
+```
+**BREAKING in 1.13**: now sends `PUT /chats/{chat_id}/typing/{user_id}` (no body), per the OpenAPI spec. The previous shape (`PUT /chats/{chat_id}/typing` + body `{ user }`) silently failed against the real backend.
+
+### `addParticipantsToChat(chatId, participants)`
+```ts
+await emby.addParticipantsToChat('chat_id', [
+    { id: 'p1', name: 'Alice' },
+    { id: 'p2', name: 'Bob', email: 'bob@example.com', is_bot: false },
+]);
+```
+
+### Chat CRUD wrappers
+
+#### `createChat(chat, participants?)`
+```ts
+// Group / supergroup / channel: participants optional
+await emby.createChat({
+    id: 'c1',
+    title: 'Project room',
+    type: 'group',
+    metadata: { dep: 'eng' },
+    owner: { id: 'u1', name: 'Owner' },
+});
+
+// Private chat — backend requires participants on creation
+await emby.createChat(
+    { id: 'dm1', title: 'DM', type: 'private', owner: { id: 'u1', name: 'Owner' } },
+    [{ id: 'u2', name: 'Other Party' }],
+);
+```
+
+#### `updateChat(chatId, updates)`
+```ts
+await emby.updateChat('chat_id', {
+    title: 'Renamed',
+    metadata: { color: 'blue' },
 });
 ```
-##### to delete message
-```javascript
-emby.updateMessage(messageId, {isDeleted: true});
+
+#### `deleteChat(chatId)`
+```ts
+await emby.deleteChat('chat_id');
 ```
 
-#### deleteMessage
-```javascript
-/**
- * Send a message to a chat.
- *
- * @param {string} chatId - The unique identifier for the chat. This parameter is required.
- * @param {string} messageId - The unique identifier for the message. This parameter is required.
- * 
- * @returns {Promise<Object>} A promise that resolves to the response of the send message action.
- */
-```
-```javascript
-emby
-    .deleteMessage(
-        chatId,
-        messageId
-    );
-    .then(response => {
-        console.info('message was successfully deleted', response);
-    })
-    .catch(e => {
-        console.error(e.message);
-    });
+#### `getChatParticipants(chatId, query?)`
+```ts
+const r = await emby.getChatParticipants('chat_id', { page: 1, limit: 100 });
+console.log(r.participants);
 ```
 
-#### addParticipantsToChat
-```javascript
-/**
- * Update a message in a chat.
- *
- * @param {string} chatId - The unique identifier for the chat. This parameter is required.
- * @param {Object[]} participants=[] - An array of participant objects. This parameter is required.
- * @param {string} participants[].id - The unique identifier for the recipient. This parameter is required.
- * @param {string} participants[].name - The name of the recipient.
- * @param {string} [participants[].email] - The name of the recipient.
- * @param {string} [participants[].link] - The name of the recipient.
- * @param {string} [participants[].picture] - The name of the recipient.
- * @param {boolean} [participants[].is_bot=false] - Indicates if the recipient is a bot.
- * 
- * @returns {Promise<Object>} A promise that resolves to the response of the update message action.
- */
+#### `removeParticipantFromChat(chatId, userId)`
+```ts
+await emby.removeParticipantFromChat('chat_id', 'user_id');
 ```
-```javascript
-emby
-    .addParticipantsToChat(
-        chatId,
-        [
-            {
-                id: faker.string.alphanumeric(6),
-                name: faker.person.fullName(),
-            },
-            {
-                id: faker.string.alphanumeric(6),
-                name: faker.person.fullName(),
-            },
-            {
-                id: faker.string.alphanumeric(6),
-                name: faker.person.fullName(),
-            },
-            {
-                id: faker.string.alphanumeric(6),
-                name: faker.person.fullName(),
-            }
-        ]
-    );
+Removes a single participant. To remove many, loop on the caller side.
+
+### User CRUD wrappers
+
+#### `createUser(user)`
+```ts
+await emby.createUser({
+    id: 'u1',
+    name: 'New User',
+    email: 'user@example.com',
+    picture: 'https://avatar.url/u1.jpg',
+    metadata: { team: 'eng' },
+});
 ```
+
+#### `getUser(userId)`
+```ts
+const r = await emby.getUser('user_id');
+console.log(r.data.user);
+```
+
+#### `updateUser(userId, updates)`
+```ts
+await emby.updateUser('user_id', { name: 'Updated Name', email: 'new@example.com' });
+```
+
+#### `deleteUser(userId)`
+```ts
+await emby.deleteUser('user_id');
+```
+
+#### `getUserChats(userId, query?)`
+```ts
+const r = await emby.getUserChats('user_id', {
+    page: 1,
+    limit: 50,
+    order: 'desc',
+    read: false,                      // unread only
+    metadata: { dep: 'cs' },          // filter by chat metadata
+});
+console.log(r.chats);
+```
+
+---
+
+## Auto-generated `.api.*`
+
+Every `operationId` in `openapi.yml` is exposed as a typed, Zod-validated method on `sdk.api.*`. Useful when you want strict spec-conforming inputs, or for endpoints not covered by the hand-written wrappers (chat creation, user CRUD, tenant config, FCM tokens, S3 / Firebase / push settings, `tenant.clearData`, etc).
+
+Input shape follows the openapi-fetch convention — `{ path, query, body }` per operation:
+
+```ts
+// Create user
+await emby.api.userCreate({
+    body: { user: { id: 'u1', name: 'New User' } },
+});
+
+// Create a private chat with participants
+await emby.api.chatCreate({
+    body: {
+        chat: { id: 'c1', title: 'DM', type: 'private', owner: { id: 'u1', name: 'New User' } },
+        participants: [{ id: 'u2', name: 'Other Party' }],
+    },
+});
+
+// Send a message
+await emby.api.chatSendMessage({
+    path: { chat_id: 'c1' },
+    body: {
+        user: { id: 'u1', name: 'New User' },     // top-level (required)
+        messages: [{ text: 'hello' }],
+    },
+});
+
+// List user's chats
+const r = await emby.api.userChats({
+    path: { user_id: 'u1' },
+    query: { limit: 50, order: 'desc' },
+});
+```
+
+Bad input throws `ZodError` synchronously (before any HTTP call). To inspect the surface:
+
+```ts
+console.log(Object.keys(emby.api).sort());
+// chatAddParticipants, chatCreate, chatDelete, chatDeleteParticipants, chatList,
+// chatMessages, chatParticipants, chatSendMessage, chatSendTyping, chatSetS3Credentials,
+// chatSetWebhook, chatShow, chatUpdate, chatUpdateMessage, tenantClearData,
+// tenantSetFirebaseConfigForJs, tenantSetFirebaseFcmVapid, tenantSetFirebaseServiceAccount,
+// tenantSetPushNotificationsSettings, tenantSetS3Credentials, tenantSetWebhookSettings,
+// userAddFcmToken, userChats, userCreate, userDelete, userShow, userUpdate
+```
+
+---
+
+## TypeScript
+
+Types ship in the package; consumers get full autocomplete and type-checking out of the box:
+
+```ts
+import { Emby, type ChatResource, type GetChatsResponse } from '@emby-chat/node-sdk';
+
+const sdk = new Emby({ /* … */ });
+const r = await sdk.getChats<GetChatsResponse>({ limit: 10 });
+const first: ChatResource | undefined = Object.values(r.chats)[0];
+```
+
+For `.api.*` methods the input/output types are inferred from the generated Zod schemas — no extra annotation needed.
+
+---
+
+## Error handling
+
+```ts
+try {
+    await emby.sendMessage('chat_id', user, [], 'hello');
+} catch (e) {
+    if (e instanceof Error) {
+        console.error(e.message);                                     // backend body as string
+        console.error('status:', (e as Error & { status?: number }).status);
+        console.error('body:', (e as Error & { body?: unknown }).body); // parsed JSON when available
+    }
+}
+```
+
+Zod validation errors from `.api.*` methods throw `ZodError` (synchronous, before HTTP).

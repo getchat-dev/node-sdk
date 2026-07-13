@@ -137,7 +137,9 @@ describe('Emby.url()', () => {
         const qs = parseQuery(out);
         assert.equal(qs['recipients[0][id]'], 'p1');
         assert.equal(qs['recipients[0][name]'], 'Alice');
-        assert.equal(qs['recipients[0][is_bot]'], 'false');
+        // is_bot boolean is coerced to 0/1 integer for the wire (Laravel `boolean` rule
+        // rejects 'true'/'false' strings produced by querystring.stringify on bool).
+        assert.equal(qs['recipients[0][is_bot]'], '0');
         assert.equal(qs['recipients[1][id]'], 'p2');
 
         const expected = expectedHmac(CONFIG.secret, [CONFIG.id, nonce, 'u1', 'p1', 'Alice', 'p2', 'Bob']);
@@ -262,6 +264,34 @@ describe('Emby.urlByChatId()', () => {
 
     test('throws when user is not a plain object', () => {
         assert.throws(() => sdk.urlByChatId('c1', 'not-object' as unknown as { id: string }), /user.*plain object/);
+    });
+
+    test('chat with create:true — signature follows PHP verifyLegacyMd5 (ksort + pre-coerced int)', () => {
+        restore = stubMathRandom([0]);
+        const nonce = predictableNonce('a', 32);
+
+        const out = sdk.urlByChatId(
+            { id: 'https://markuper.com', create: true },
+            { id: '10001', name: 'Howard Lovecraft' },
+        );
+
+        const qs = parseQuery(out);
+        assert.equal(qs['chat[create]'], '1');
+        assert.equal(qs['chat[id]'], 'https://markuper.com');
+        assert.equal(qs['user[id]'], '10001');
+        assert.equal(qs['user[name]'], 'Howard Lovecraft');
+
+        // Signature input:
+        //   user ksort([id, name]) → push '10001', 'Howard Lovecraft'
+        //   chat ksort([create, id]) with create=1 (pre-coerced) → push 1, 'https://markuper.com'
+        // Join stringifies 1 → "1" (matches PHP which sees raw wire "1" string — backend
+        // `$beforeSanitizers['chat.create' => 'boolean']` does NOT run before `authorize()`,
+        // confirmed by live backend logs).
+        const expected = crypto
+            .createHash('md5')
+            .update([CONFIG.secret, nonce, '10001', 'Howard Lovecraft', 1, 'https://markuper.com'].join(','))
+            .digest('hex');
+        assert.equal(qs.signature, expected);
     });
 
     test('signature is MD5 of [clientSecret, nonce, user fields, chat fields]', () => {

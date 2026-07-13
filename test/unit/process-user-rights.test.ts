@@ -17,9 +17,9 @@ describe('libs/processUserRights', () => {
         assert.deepEqual(processUserRights({ send_messages: true, bogus_right: 'x' }), { send_messages: '1' });
     });
 
-    describe('boolean rights (14 total)', () => {
-        test('all 14 schema rights of type=boolean are covered', () => {
-            assert.equal(BOOLEAN_RIGHTS.length, 14);
+    describe('boolean rights (16 total)', () => {
+        test('all 16 schema rights of type=boolean are covered', () => {
+            assert.equal(BOOLEAN_RIGHTS.length, 16);
         });
 
         for (const right of BOOLEAN_RIGHTS) {

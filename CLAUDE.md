@@ -13,14 +13,13 @@ Anything edited under `src/` is public surface area — version is bumped in `pa
 
 ## Commands
 
-- `npm test` — runs node's built-in test runner on TS sources via `tsx` (221 tests: 4 unit + 12 integration files). No compilation, tests import from `src/` directly.
+- `npm test` — runs node's built-in test runner on TS sources via `tsx` (260 tests: 3 unit + 13 integration files). No compilation, tests import from `src/` directly.
 - `npm run test:live` — opt-in E2E against a real tenant (needs `.env` with `EMBY_API_TOKEN` + `EMBY_BASE_URL`; 50 tests across happy-path / wire-format regressions / edge cases). Suites skip themselves if creds missing. Runs serially via `--test-concurrency=1` because each `before/after` calls `tenant.clearData({ sync: true })` and parallel suites would race-wipe each other. **Never point at production.** See `test/live/README.md`.
 - `npm run typecheck` — `tsc --noEmit` across src + test.
 - `npm run build` — cleans `dist/`, compiles `tsconfig.cjs.json` → `dist/cjs`, `tsconfig.esm.json` → `dist/esm`, then writes `{"type":"commonjs"}` / `{"type":"module"}` stub `package.json` inside each subdir so Node resolves module kind correctly.
 - `npm run coverage:ci` — runs tests with `--experimental-test-coverage` and gates at 90% (see `scripts/coverage-gate.js`; threshold is 90%, not 100%, because TS emit introduces unavoidable compiler-prelude "uncovered" lines).
 - `npm run generate` — regenerates `src/generated/{schemas,operations}.ts` from `openapi.yml`. Commit the output.
 - `npm run check` / `check:fix` — Biome lint+format.
-- `npm run demo` — builds CJS and runs `demo/index.js` (Express playground; still plain JS).
 
 Smoke-verifying a change without a real backend: run the relevant test file (`node --test --import tsx 'test/integration/<name>.test.ts'`) or start the mock server via `test/helpers/mockServer.ts`.
 
@@ -87,7 +86,7 @@ All requests carry `Authorization: Bearer ${apiToken}`. Non-2xx/3xx responses re
 
 ### Hand-written high-level methods (public API surface, delegating wrappers)
 
-`getChats`, `getChatInfo`, `getMessagesFromChat`, `sendMessage`, `updateMessage`, `deleteMessage`, `sendTyping`, `addParticipantsToChat` — historically each contained business logic beyond plain OpenAPI passthrough. **As of 1.13 they all delegate into `.api.*`** through small adapter logic that:
+`getChats`, `getChatInfo`, `getMessagesFromChat`, `sendMessage`, `updateMessage`, `deleteMessage`, `sendTyping`, `addParticipantsToChat`, plus the chat/user CRUD wrappers (`createChat`, `updateChat`, `deleteChat`, `getChatParticipants`, `removeParticipantFromChat`, `createUser`, `getUser`, `updateUser`, `deleteUser`, `getUserChats`) — historically each contained business logic beyond plain OpenAPI passthrough. **As of 1.13 they all delegate into `.api.*`** through small adapter logic that:
 
 - coerces lenient inputs (`with_owners: 'yes' | true | 1` → spec `0|1` integer; `isDeleted/isEdited/withUsers` smart-bool → integer; `withUsers` legacy field name accepted alongside spec `with_users`);
 - normalizes chat/participant payloads (`normalizeChat`, `normalizeParticipant`);

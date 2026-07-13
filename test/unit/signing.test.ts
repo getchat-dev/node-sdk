@@ -103,6 +103,16 @@ describe('libs/signing', () => {
             const out = normalizeChat({ id: 'c1', title: 'T', type: 'group', bogus: 'x', metadata: { a: '1' } });
             assert.deepEqual(out, { id: 'c1', title: 'T', type: 'group', metadata: { a: '1' } });
         });
+        test('normalizeChat coerces create:true → 1 / create:false → 0 (pre-signing)', () => {
+            // Backend's `$beforeSanitizers` does NOT run before `authorize()`, so the signature
+            // sees `chat.create` as the raw wire value ("1"/"0"). JS must produce the same.
+            assert.deepEqual(normalizeChat({ id: 'c1', create: true }), { id: 'c1', create: 1 });
+            assert.deepEqual(normalizeChat({ id: 'c1', create: false }), { id: 'c1', create: 0 });
+        });
+        test('normalizeChat leaves already-numeric create unchanged', () => {
+            assert.deepEqual(normalizeChat({ id: 'c1', create: 1 }), { id: 'c1', create: 1 });
+            assert.deepEqual(normalizeChat({ id: 'c1', create: 0 }), { id: 'c1', create: 0 });
+        });
         test('normalizeParticipant applies is_bot default', () => {
             const out = normalizeParticipant({ id: 'p1', name: 'P' });
             assert.deepEqual(out, { id: 'p1', name: 'P', is_bot: false });

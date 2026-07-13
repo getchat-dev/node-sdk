@@ -3,11 +3,16 @@ import * as http from 'node:http';
 import * as https from 'node:https';
 import * as querystring from 'node:querystring';
 import {
+    type ChatCreateInput,
     type ChatListInput,
     type ChatMessagesInput,
+    type ChatParticipantsInput,
     type ChatSendMessageInput,
+    type ChatUpdateInput,
     createOperations,
     type Operations,
+    type UserChatsInput,
+    type UserUpdateInput,
 } from './generated/operations.js';
 
 // Convenience aliases for query/body slots — used when hand-written methods
@@ -15,11 +20,18 @@ import {
 type ChatListQuery = NonNullable<NonNullable<ChatListInput>['query']>;
 type ChatMessagesQuery = NonNullable<NonNullable<ChatMessagesInput>['query']>;
 type ChatSendMessageBody = ChatSendMessageInput['body'];
+type ChatCreateBody = ChatCreateInput['body'];
+type ChatUpdateBody = ChatUpdateInput['body'];
+type ChatParticipantsQuery = NonNullable<NonNullable<ChatParticipantsInput>['query']>;
+type UserUpdateBody = UserUpdateInput['body'];
+type UserChatsQuery = NonNullable<NonNullable<UserChatsInput>['query']>;
 
 import * as _ from './libs/helpers.js';
 import processUserRights from './libs/processUserRights.js';
 import {
     addToSignature,
+    appendLegacy,
+    coerceBooleansForWire,
     flatten,
     normalizeChat,
     normalizeData,
@@ -29,12 +41,17 @@ import {
 
 import type {
     ChatCreate,
+    ChatInput,
+    ChatUpdate,
     GetChatMessagesQuery,
     GetChatsQuery,
+    GetUserChatsQuery,
     MessageButton,
     MessageInput,
+    PaginationQuery,
     Participant,
     StringMap,
+    UrlRecipient,
     User,
     UserRights,
 } from './types.js';
@@ -52,12 +69,23 @@ export type HttpMethod = 'get' | 'post' | 'put' | 'delete';
 export interface UrlUserOptions extends Partial<User> {
     session?: string;
     rights?: UserRights;
+    /**
+     * URL-signing flow accepts an `is_bot` flag on the user itself (the current
+     * viewer can be a bot). Validated by `ChatIndexRequest.rules()` —
+     * `'user.is_bot' => 'boolean'`.
+     */
+    is_bot?: boolean;
 }
 
 export interface UrlOptions {
-    chat?: Partial<ChatCreate> | string | null;
+    chat?: ChatInput | string | null;
     user: UrlUserOptions;
-    participants?: Participant[];
+    /**
+     * URL-signing recipients — stricter than REST `Participant` (name required,
+     * picture must be a URL). See `UrlRecipient` docstring and
+     * emby/app/Http/Requests/ChatIndexRequest.php `rules()`.
+     */
+    participants?: UrlRecipient[];
     extra?: Record<string, unknown>;
 }
 
@@ -73,7 +101,8 @@ export interface UpdateMessageOptions {
     returnMessage?: boolean;
 }
 
-export type ChatInput = Partial<ChatCreate> | string;
+/** Convenience alias used by `sendMessage` — accepts the object shape or a string id. */
+export type ChatArg = ChatInput | string;
 export type MessageTextInput = string | { text: string; recipient_id?: string };
 
 export class Emby {
@@ -278,15 +307,19 @@ export class Emby {
             queryParams[key] = extra[key];
         });
 
-        const query = querystring.stringify(flatten(queryParams) as querystring.ParsedUrlQueryInput);
+        // Laravel's `boolean` validator rejects 'true'/'false' wire — coerce bools to 1/0
+        // AFTER signing (signature kept booleans to match PHP appendFieldsFixed/packField).
+        const wire = coerceBooleansForWire(queryParams) as Record<string, unknown>;
+
+        const query = querystring.stringify(flatten(wire) as querystring.ParsedUrlQueryInput);
 
         return `${this.baseUrl}?${query}`;
     }
 
     urlByChatId(
-        chat: ChatInput = {},
+        chat: ChatInput | string = {},
         user: UrlUserOptions = {},
-        participants: Participant[] = [],
+        participants: UrlRecipient[] = [],
         extra: Record<string, unknown> = {},
     ): string {
         if (!this.clientId) {
@@ -351,27 +384,40 @@ export class Emby {
             recipients: [] as Record<string, unknown>[],
         };
 
-        signatureParams = addToSignature(signatureParams, userData, ['id', 'name', 'email', 'link', 'picture']);
+        // Match backend's `verifyLegacyMd5` / `appendInfoLegacy`:
+        //   - user filter excludes `link` (backend whitelist: id, name, email, picture)
+        //   - recipients filter includes email + picture (backend: id, name, email, picture)
+        //   - chat filter includes `list`, excludes `type`/`metadata`
+        //   - each section is ksorted (alphabetical) + skips nulls + bool→'true'/'false'
+        signatureParams = appendLegacy(signatureParams, userData, ['id', 'name', 'email', 'picture']);
 
         participants.forEach((participant) => {
             const normalized = normalizeData(participant, {
                 id: null,
                 name: null,
+                email: null,
+                link: null,
+                picture: null,
                 is_bot: { default: false },
             });
             (queryParams.recipients as Record<string, unknown>[]).push(normalized);
-            signatureParams = addToSignature(signatureParams, normalized, ['id', 'name']);
+            signatureParams = appendLegacy(signatureParams, normalized, ['id', 'name', 'email', 'picture']);
         });
 
-        signatureParams = addToSignature(signatureParams, chatData, ['id', 'title', 'socket_port', 'create']);
+        signatureParams = appendLegacy(signatureParams, chatData, ['id', 'list', 'title', 'socket_port', 'create']);
 
-        queryParams.signature = crypto.createHash('md5').update(signatureParams.join(',')).digest('hex');
+        const sigInput = signatureParams.join(',');
+        queryParams.signature = crypto.createHash('md5').update(sigInput).digest('hex');
 
         Object.keys(extra).forEach((key) => {
             queryParams[key] = extra[key];
         });
 
-        const query = querystring.stringify(flatten(queryParams) as querystring.ParsedUrlQueryInput);
+        // Laravel's `boolean` validator rejects 'true'/'false' wire — coerce bools to 1/0
+        // AFTER signing (signature kept booleans to match PHP appendInfoLegacy string form).
+        const wire = coerceBooleansForWire(queryParams) as Record<string, unknown>;
+
+        const query = querystring.stringify(flatten(wire) as querystring.ParsedUrlQueryInput);
 
         return `${this.baseUrl}?${query}`;
     }
@@ -474,7 +520,7 @@ export class Emby {
     }
 
     sendMessage<T = unknown>(
-        chat: ChatInput,
+        chat: ChatArg,
         user: User,
         participants: Participant[] | undefined,
         message: MessageTextInput,
@@ -617,6 +663,155 @@ export class Emby {
         return this.api.chatAddParticipants<T>({
             path: { chat_id: chatId },
             body: { participants: normalized },
+        });
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Chat CRUD
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Create a chat. Backend requires `participants` for `type: 'private'`.
+     *
+     * @param chat            Chat fields: { id, title, type, metadata?, owner? }.
+     * @param participants    Optional participants array (required for private chats).
+     */
+    createChat<T = unknown>(chat: ChatCreate, participants?: Participant[]): Promise<T> {
+        if (!_.isFilledPlainObject(chat)) {
+            throw new Error('chat must be a non-empty object');
+        }
+        const body: Record<string, unknown> = { chat };
+        if (_.isFilledArray(participants)) {
+            body.participants = (participants as Participant[]).map(normalizeParticipant);
+        }
+        return this.api.chatCreate<T>({ body: body as ChatCreateBody });
+    }
+
+    /**
+     * Update mutable chat fields (title, metadata, id).
+     */
+    updateChat<T = unknown>(chatId: string, updates: ChatUpdate = {}): Promise<T> {
+        if (!_.isString(chatId)) {
+            throw new Error("chat id isn't passed");
+        }
+        return this.api.chatUpdate<T>({
+            path: { chat_id: chatId },
+            body: { chat: updates } as ChatUpdateBody,
+        });
+    }
+
+    /**
+     * Delete a chat permanently.
+     */
+    deleteChat<T = unknown>(chatId: string): Promise<T> {
+        if (!_.isString(chatId)) {
+            throw new Error("chat id isn't passed");
+        }
+        return this.api.chatDelete<T>({ path: { chat_id: chatId } });
+    }
+
+    /**
+     * List participants of a chat (paginated).
+     */
+    getChatParticipants<T = unknown>(chatId: string, query: PaginationQuery = {}): Promise<T> {
+        if (!_.isString(chatId)) {
+            throw new Error("chat id isn't passed");
+        }
+        const q: Partial<ChatParticipantsQuery> = {
+            page: Math.max(parseInt(String(query.page), 10) || 1, 1),
+            limit: Math.min(parseInt(String(query.limit), 10) || 50, 1000),
+        };
+        return this.api.chatParticipants<T>({
+            path: { chat_id: chatId },
+            query: q as ChatParticipantsQuery,
+        });
+    }
+
+    /**
+     * Remove a single participant from a chat by user id.
+     */
+    removeParticipantFromChat<T = unknown>(chatId: string, userId: string): Promise<T> {
+        if (!_.isString(chatId)) {
+            throw new Error("chat id isn't passed");
+        }
+        if (!_.isString(userId)) {
+            throw new Error("user id isn't passed");
+        }
+        return this.api.chatDeleteParticipants<T>({
+            path: { chat_id: chatId, user_id: userId },
+        });
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // User CRUD
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Create a user.
+     */
+    createUser<T = unknown>(user: User): Promise<T> {
+        if (!_.isFilledPlainObject(user)) {
+            throw new Error('user must be a non-empty object');
+        }
+        return this.api.userCreate<T>({ body: { user } });
+    }
+
+    /**
+     * Get a user by id.
+     */
+    getUser<T = unknown>(userId: string): Promise<T> {
+        if (!_.isString(userId)) {
+            throw new Error("user id isn't passed");
+        }
+        return this.api.userShow<T>({ path: { user_id: userId } });
+    }
+
+    /**
+     * Update mutable user fields.
+     */
+    updateUser<T = unknown>(userId: string, updates: Partial<User> = {}): Promise<T> {
+        if (!_.isString(userId)) {
+            throw new Error("user id isn't passed");
+        }
+        return this.api.userUpdate<T>({
+            path: { user_id: userId },
+            body: { user: updates } as UserUpdateBody,
+        });
+    }
+
+    /**
+     * Delete a user permanently.
+     */
+    deleteUser<T = unknown>(userId: string): Promise<T> {
+        if (!_.isString(userId)) {
+            throw new Error("user id isn't passed");
+        }
+        return this.api.userDelete<T>({ path: { user_id: userId } });
+    }
+
+    /**
+     * List chats associated with a user (paginated, filterable by metadata / read state / order).
+     */
+    getUserChats<T = unknown>(userId: string, query: GetUserChatsQuery = {}): Promise<T> {
+        if (!_.isString(userId)) {
+            throw new Error("user id isn't passed");
+        }
+        const q: Partial<UserChatsQuery> = {
+            page: Math.max(parseInt(String(query.page), 10) || 1, 1),
+            limit: Math.min(parseInt(String(query.limit), 10) || 50, 1000),
+        };
+        if (query.order === 'asc' || query.order === 'desc') {
+            q.order = query.order;
+        }
+        if (_.isBoolean(query.read)) {
+            q.read = query.read;
+        }
+        if (_.isFilledPlainObject(query.metadata)) {
+            q.metadata = query.metadata as UserChatsQuery['metadata'];
+        }
+        return this.api.userChats<T>({
+            path: { user_id: userId },
+            query: q as UserChatsQuery,
         });
     }
 }

@@ -55,12 +55,44 @@ export interface UserResource {
 // Participant
 // ---------------------------------------------------------------------------
 
-/** Input shape used when adding participants to a chat or generating URLs. */
+/**
+ * Participant payload for **REST API** flow:
+ *   - `chat.addParticipants` (POST /chats/{id}/participants)
+ *   - `chat.sendMessage` (POST /chats/{id}/messages — `participants[]` on new chats)
+ *   - `chat.create` (POST /chats — `participants[]` on creation)
+ *
+ * Lenient: backend only requires `id`; everything else is optional and
+ * sanitized server-side (see `components/schemas/ParticipantInput` in
+ * openapi.yml). If you're building a **signed iframe URL** instead, use
+ * `UrlRecipient` — that flow has stricter rules.
+ */
 export interface Participant {
     id: string;
     name?: string;
     email?: string;
     link?: string;
+    picture?: string;
+    is_bot?: boolean;
+}
+
+/**
+ * Recipient payload for **URL-signing flow** (`url()` / `urlByChatId()`).
+ * Stricter than REST `Participant` — backend validator
+ * `emby/app/Http/Requests/ChatIndexRequest.php` enforces:
+ *   - `name` REQUIRED (`'recipients.*.name' => 'required'`)
+ *   - `picture` must be a URL if present (`'recipients.*.picture' => 'nullable|url'`)
+ *   - `email` / `link` nullable but, when present, must match their format
+ *
+ * If a signed URL is visited with a nameless recipient, the iframe request
+ * fails validation client-side — so we mirror the stricter contract at the
+ * TS level.
+ */
+export interface UrlRecipient {
+    id: string;
+    name: string;
+    email?: string;
+    link?: string;
+    /** Must be a URL at the backend side. */
     picture?: string;
     is_bot?: boolean;
 }
@@ -77,7 +109,7 @@ export interface ParticipantResource {
 }
 
 // ---------------------------------------------------------------------------
-// User rights (derived from libs/rights.scheme.json — not in openapi.yml)
+// User rights (derived from libs/rights.scheme.ts — not in openapi.yml)
 // ---------------------------------------------------------------------------
 
 export interface UserRights {
@@ -86,7 +118,9 @@ export interface UserRights {
     delete_messages?: DeleteMessagesRight;
     react_messages?: boolean;
     pin_messages?: PinMessagesRight;
+    can_press_buttons?: boolean;
     send_typing?: boolean;
+    track_presence?: boolean;
     send_photos?: boolean;
     send_voices?: boolean;
     send_audio?: boolean;
@@ -104,7 +138,35 @@ export interface UserRights {
 // Chat
 // ---------------------------------------------------------------------------
 
-/** Input for creating a chat via POST /chats. */
+/**
+ * Chat payload accepted by `url()` / `urlByChatId()` / `sendMessage()`. Looser
+ * than the strict REST `ChatCreate` body — used in TWO distinct wire flows that
+ * each validate a different subset:
+ *
+ *  1. **URL-signing** (`url()` / `urlByChatId()`) — validated by the backend's
+ *     `ChatIndexRequest` controller (emby/app/Http/Requests/ChatIndexRequest.php).
+ *     Recognizes: `id`, `title`, `socket_port` (≤4 chars), `create` (boolean),
+ *     `metadata`. **`type` is ignored here** — the URL-signing validator does
+ *     not declare a rule for `chat.type`.
+ *
+ *  2. **REST** (`sendMessage` → `chat.sendMessage`) — validated by
+ *     `SendMessageRequest`. Recognizes `type`, `title`, `metadata` (no
+ *     `create` / `socket_port` — those are URL-signing-only).
+ *
+ * `normalizeChat()` (libs/signing.ts) uses the UNION whitelist
+ * (id/title/socket_port/create/type/metadata); anything else is dropped before
+ * the wire. Each backend validator then ignores fields it doesn't know.
+ */
+export interface ChatInput {
+    id?: string;
+    title?: string;
+    type?: ChatType;
+    metadata?: StringMap;
+    create?: boolean;
+    socket_port?: string | number;
+}
+
+/** Input for creating a chat via POST /chats (strict — id/title/type required). */
 export interface ChatCreate {
     id: string;
     title: string;
