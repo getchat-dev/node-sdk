@@ -352,6 +352,16 @@ await emby.removeParticipantFromChat('chat_id', 'user_id');
 ```
 Removes a single participant. To remove many, loop on the caller side.
 
+#### `updateParticipantRights(chatId, userId, rights)`
+```ts
+await emby.updateParticipantRights('chat_id', 'user_id', {
+    send_messages: false,      // mute this participant in this chat
+    pin_messages: 'for_everyone',
+    edit_messages: null,       // null clears the override — falls back to the signed-link value
+});
+```
+Overrides a participant's rights for one chat. At least one right is required; booleans accept `true`/`false`/`null`, and `edit_messages`/`delete_messages` are `none|my|any`, `pin_messages` is `none|for_me|for_everyone`.
+
 ### User CRUD wrappers
 
 #### `createUser(user)`

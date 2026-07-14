@@ -20,6 +20,8 @@ import {
     type ChatShowResponse,
     type ChatUpdateInput,
     type ChatUpdateMessageResponse,
+    type ChatUpdateParticipantRightsInput,
+    type ChatUpdateParticipantRightsResponse,
     type ChatUpdateResponse,
     createOperations,
     type Operations,
@@ -39,6 +41,7 @@ type ChatMessagesQuery = NonNullable<NonNullable<ChatMessagesInput>['query']>;
 type ChatSendMessageBody = ChatSendMessageInput['body'];
 type ChatCreateBody = ChatCreateInput['body'];
 type ChatUpdateBody = ChatUpdateInput['body'];
+type ChatUpdateParticipantRightsBody = ChatUpdateParticipantRightsInput['body'];
 type ChatParticipantsQuery = NonNullable<NonNullable<ChatParticipantsInput>['query']>;
 type UserUpdateBody = UserUpdateInput['body'];
 type UserChatsQuery = NonNullable<NonNullable<UserChatsInput>['query']>;
@@ -875,6 +878,39 @@ export class Emby {
         }
         return this.api.chatDeleteParticipants<T>({
             path: { chat_id: chatId, user_id: userId },
+        });
+    }
+
+    /**
+     * Override a participant's rights for a single chat (`PUT
+     * chats/{chatId}/participants/{userId}/rights`). Every right is optional but at
+     * least one must be given; each present value fully replaces the participant's
+     * signed-link value for this chat, and an explicit `null` clears the override
+     * (they fall back to the link value). Changes propagate live over the socket.
+     *
+     * @param chatId  Chat id.
+     * @param userId  Participant's user id.
+     * @param rights  Per-chat right overrides — booleans accept `true`/`false`/`null`;
+     *                `edit_messages`/`delete_messages` are `none|my|any`, `pin_messages`
+     *                is `none|for_me|for_everyone`.
+     */
+    updateParticipantRights<T = ChatUpdateParticipantRightsResponse>(
+        chatId: string,
+        userId: string,
+        rights: ChatUpdateParticipantRightsBody,
+    ): Promise<T> {
+        if (!_.isString(chatId)) {
+            throw new Error("chat id isn't passed");
+        }
+        if (!_.isString(userId)) {
+            throw new Error("user id isn't passed");
+        }
+        if (!_.isFilledPlainObject(rights)) {
+            throw new Error('rights must be a non-empty object');
+        }
+        return this.api.chatUpdateParticipantRights<T>({
+            path: { chat_id: chatId, user_id: userId },
+            body: rights,
         });
     }
 
