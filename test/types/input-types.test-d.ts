@@ -298,9 +298,13 @@ type ChatShowIn = NonNullable<Parameters<Api['chatShow']>[0]>;
 export type _ctrlSignal = Expect<Equal<ChatShowIn['signal'], AbortSignal | undefined>>;
 export type _ctrlTimeout = Expect<Equal<ChatShowIn['timeout'], number | undefined>>;
 export type _ctrlRetries = Expect<Equal<ChatShowIn['retries'], number | undefined>>;
+export type _ctrlRetryDelay = Expect<Equal<ChatShowIn['retryDelay'], number | undefined>>;
 // Wire slots plus control options together type-check…
 export type _ctrlAccepted = Expect<
-    AcceptsInput<'chatShow', { path: { chat_id: 'c1' }; signal: AbortSignal; timeout: 5000; retries: 1 }>
+    AcceptsInput<
+        'chatShow',
+        { path: { chat_id: 'c1' }; signal: AbortSignal; timeout: 5000; retries: 1; retryDelay: 50 }
+    >
 >;
 // …and the control options are optional (bare wire input still valid).
 export type _ctrlOptional = Expect<AcceptsInput<'chatShow', { path: { chat_id: 'c1' } }>>;
