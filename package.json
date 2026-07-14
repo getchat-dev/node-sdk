@@ -19,6 +19,9 @@
     "README.md",
     "LICENSE"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "generate": "tsx scripts/generate.ts && biome format --write src/generated",
     "build": "npm run build:clean && npm run build:cjs && npm run build:esm && npm run build:pkgjson",
