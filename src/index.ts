@@ -46,6 +46,7 @@ type UserChatsQuery = NonNullable<NonNullable<UserChatsInput>['query']>;
 import * as _ from './libs/helpers.js';
 import processUserRights from './libs/processUserRights.js';
 import { type ResolvedRequestOptions, resolveRequestOptions, TimeoutError } from './libs/requestOptions.js';
+import { backoffDelay, parseRetryAfter, shouldRetry, sleep } from './libs/retry.js';
 import {
     addToSignature,
     appendLegacy,
@@ -84,6 +85,14 @@ export interface EmbyRequestOptions {
      * promise rejects with a `TimeoutError`. `0` disables it. Defaults to `30000`.
      */
     timeout?: number;
+    /**
+     * Retry attempts after the first failure (0 disables). Defaults to `2`.
+     * GET/DELETE retry on network errors, 5xx and 429; POST/PUT retry only on 429
+     * (honoring `Retry-After`) and connection errors that never reached the server.
+     */
+    retries?: number;
+    /** Base backoff delay in ms (exponential with jitter between attempts). Defaults to `200`. */
+    retryDelay?: number;
 }
 
 export interface EmbyConfig {
@@ -213,69 +222,98 @@ export class Emby {
             sParams = JSON.stringify(params);
         }
 
-        const { timeout } = this.requestOptions;
+        const { timeout, retries, retryDelay } = this.requestOptions;
 
-        return new Promise<T>((resolve, reject) => {
-            const transport = urlObj.protocol === 'https:' ? https : http;
+        const attempt = () =>
+            new Promise<T>((resolve, reject) => {
+                const transport = urlObj.protocol === 'https:' ? https : http;
 
-            // A per-attempt timeout aborts the request via this controller. Node 16
-            // has no AbortSignal.timeout, so we drive it with a plain timer.
-            const controller = new AbortController();
-            options.signal = controller.signal;
+                // A per-attempt timeout aborts the request via this controller. Node 16
+                // has no AbortSignal.timeout, so we drive it with a plain timer.
+                const controller = new AbortController();
+                options.signal = controller.signal;
 
-            let timer: NodeJS.Timeout | undefined;
-            if (timeout > 0) {
-                timer = setTimeout(() => controller.abort(), timeout);
-                // A pending timeout must not keep the process alive.
-                timer.unref();
-            }
-            const clearTimer = () => {
-                if (timer) clearTimeout(timer);
-            };
+                let timer: NodeJS.Timeout | undefined;
+                if (timeout > 0) {
+                    timer = setTimeout(() => controller.abort(), timeout);
+                    // A pending timeout must not keep the process alive.
+                    timer.unref();
+                }
+                const clearTimer = () => {
+                    if (timer) clearTimeout(timer);
+                };
 
-            const request = transport
-                .request(options, (res) => {
-                    let body: unknown = '';
-                    res.setEncoding('utf8');
-                    res.on('data', (chunk: string) => {
-                        body = `${body}${chunk}`;
-                    });
-                    res.on('end', () => {
-                        clearTimer();
-                        const contentType = res.headers['content-type'];
-                        if (contentType?.startsWith('application/json')) {
-                            try {
-                                body = JSON.parse(body as string);
-                            } catch (e) {
-                                reject(e as Error);
-                                return;
+                const request = transport
+                    .request(options, (res) => {
+                        let body: unknown = '';
+                        res.setEncoding('utf8');
+                        res.on('data', (chunk: string) => {
+                            body = `${body}${chunk}`;
+                        });
+                        res.on('end', () => {
+                            clearTimer();
+                            const contentType = res.headers['content-type'];
+                            if (contentType?.startsWith('application/json')) {
+                                try {
+                                    body = JSON.parse(body as string);
+                                } catch (e) {
+                                    reject(e as Error);
+                                    return;
+                                }
                             }
-                        }
 
-                        const status = res.statusCode ?? 0;
-                        if (status >= 200 && status < 400) {
-                            resolve(body as T);
-                        } else {
-                            const message = typeof body === 'string' ? body : JSON.stringify(body);
-                            const e = new Error(message) as Error & { status?: number; body?: unknown };
-                            e.status = status;
-                            e.body = body;
-                            reject(e);
-                        }
+                            const status = res.statusCode ?? 0;
+                            if (status >= 200 && status < 400) {
+                                resolve(body as T);
+                            } else {
+                                const message = typeof body === 'string' ? body : JSON.stringify(body);
+                                const e = new Error(message) as Error & {
+                                    status?: number;
+                                    body?: unknown;
+                                    headers?: http.IncomingHttpHeaders;
+                                };
+                                e.status = status;
+                                e.body = body;
+                                e.headers = res.headers; // carries Retry-After for 429 retries
+                                reject(e);
+                            }
+                        });
+                    })
+                    .on('error', (e) => {
+                        clearTimer();
+                        // The only thing that aborts the controller (so far) is the timeout.
+                        reject(controller.signal.aborted ? new TimeoutError(timeout, method) : e);
                     });
-                })
-                .on('error', (e) => {
-                    clearTimer();
-                    // The only thing that aborts the controller (so far) is the timeout.
-                    reject(controller.signal.aborted ? new TimeoutError(timeout, method) : e);
-                });
 
-            if (sParams.length) {
-                request.write(sParams);
+                if (sParams.length) {
+                    request.write(sParams);
+                }
+
+                request.end();
+            });
+
+        return this.runWithRetry(attempt, type, retries, retryDelay);
+    }
+
+    /** Run `attempt`, retrying failures per the method's idempotency + backoff options. */
+    private async runWithRetry<T>(
+        attempt: () => Promise<T>,
+        method: HttpMethod,
+        retries: number,
+        retryDelay: number,
+    ): Promise<T> {
+        let lastError: unknown;
+        for (let n = 0; n <= retries; n++) {
+            try {
+                return await attempt();
+            } catch (err) {
+                lastError = err;
+                if (n === retries || !shouldRetry(method, err)) break;
+                const headers = (err as { headers?: http.IncomingHttpHeaders }).headers;
+                await sleep(backoffDelay(n, retryDelay, parseRetryAfter(headers?.['retry-after'])));
             }
-
-            request.end();
-        });
+        }
+        throw lastError;
     }
 
     url({ chat = null, user, participants = [], extra = {} }: UrlOptions): string {

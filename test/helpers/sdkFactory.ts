@@ -7,10 +7,15 @@ export const DEFAULTS: Readonly<EmbyConfig> = Object.freeze({
 });
 
 export function makeSdk(baseUrl: string, overrides: Partial<EmbyConfig> = {}): Emby {
+    const { options, ...rest } = overrides;
     return new Emby({
         ...DEFAULTS,
         base_url: baseUrl,
         api_url: baseUrl,
-        ...overrides,
+        ...rest,
+        // Retries off by default so per-method tests see a single request; retry
+        // behavior is covered on its own in request-retry.test.ts. Tests can opt in
+        // via `overrides.options`.
+        options: { retries: 0, ...options },
     });
 }

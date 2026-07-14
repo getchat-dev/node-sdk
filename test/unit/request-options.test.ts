@@ -3,14 +3,26 @@ import { describe, test } from 'node:test';
 import { resolveRequestOptions, TimeoutError } from '../../src/libs/requestOptions';
 
 describe('resolveRequestOptions', () => {
-    test('defaults timeout to 30000 when unset', () => {
-        assert.deepEqual(resolveRequestOptions(undefined), { timeout: 30_000 });
-        assert.deepEqual(resolveRequestOptions({}), { timeout: 30_000 });
+    test('fills defaults when unset', () => {
+        const defaults = { timeout: 30_000, retries: 2, retryDelay: 200 };
+        assert.deepEqual(resolveRequestOptions(undefined), defaults);
+        assert.deepEqual(resolveRequestOptions({}), defaults);
     });
 
     test('accepts a non-negative integer timeout (0 = disabled)', () => {
         assert.equal(resolveRequestOptions({ timeout: 5000 }).timeout, 5000);
         assert.equal(resolveRequestOptions({ timeout: 0 }).timeout, 0);
+    });
+
+    test('accepts and validates retry options', () => {
+        assert.deepEqual(resolveRequestOptions({ retries: 0, retryDelay: 50 }), {
+            timeout: 30_000,
+            retries: 0,
+            retryDelay: 50,
+        });
+        assert.throws(() => resolveRequestOptions({ retries: -1 }));
+        assert.throws(() => resolveRequestOptions({ retries: 999 })); // above the cap
+        assert.throws(() => resolveRequestOptions({ retryDelay: -5 }));
     });
 
     test('rejects insane timeout values', () => {

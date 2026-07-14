@@ -8,6 +8,11 @@ export const requestOptionsSchema = z.strictObject({
     // Per-attempt timeout in ms. 0 disables it. `.int().nonnegative()` rejects
     // negatives, fractions, NaN and non-numbers.
     timeout: z.number().int().nonnegative().default(30_000),
+    // Retry attempts after the first failure (0 disables). Capped so a typo like
+    // `retries: 10000` fails validation instead of hammering the backend.
+    retries: z.number().int().min(0).max(10).default(2),
+    // Base backoff delay in ms (exponential with jitter between attempts).
+    retryDelay: z.number().int().nonnegative().default(200),
 });
 
 export type ResolvedRequestOptions = z.infer<typeof requestOptionsSchema>;

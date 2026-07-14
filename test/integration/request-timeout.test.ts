@@ -18,8 +18,9 @@ describe('request timeout', () => {
         await server.close();
     });
 
+    // retries off — this suite isolates timeout behavior from retry behavior.
     const sdkWith = (timeout: number) =>
-        new Emby({ ...DEFAULTS, base_url: server.baseUrl, api_url: server.baseUrl, options: { timeout } });
+        new Emby({ ...DEFAULTS, base_url: server.baseUrl, api_url: server.baseUrl, options: { timeout, retries: 0 } });
 
     test('rejects with TimeoutError when the backend is slower than the timeout', async () => {
         server.respondWith({ status: 200, body: { status: true }, delayMs: 250 });
