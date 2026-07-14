@@ -154,10 +154,16 @@ describe('Emby user CRUD wrappers', () => {
             assert.match(path, /metadata%255Bdep%255D=cs/);
         });
 
-        test('passes with_last_message flag', async () => {
+        test('with_last_message: true is coerced to integer 1 on the wire', async () => {
             server.respondWith({ status: 200, body: { status: true, chats: [] } });
             await sdk.getUserChats('u1', { with_last_message: true });
-            assert.match(server.lastRequest!.path!, /with_last_message=true/);
+            assert.match(server.lastRequest!.path!, /with_last_message=1/);
+        });
+
+        test('with_last_message: false is coerced to integer 0 on the wire', async () => {
+            server.respondWith({ status: 200, body: { status: true, chats: [] } });
+            await sdk.getUserChats('u1', { with_last_message: false });
+            assert.match(server.lastRequest!.path!, /with_last_message=0/);
         });
 
         test('omits with_last_message when not a boolean', async () => {

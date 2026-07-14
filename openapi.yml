@@ -1111,11 +1111,14 @@ paths:
           in: query
           description: >-
             Embed each chat's latest message as `last_message`
-            (a MessageResource object).
+            (a MessageResource object). 1 = yes, 0 = no — backend wants the
+            integer wire value; Laravel's `boolean` rule on `ChatsRequest`
+            rejects the string `true`/`false`.
           required: false
           schema:
-            type: boolean
-            default: false
+            type: integer
+            enum: [0, 1]
+            default: 0
       responses:
         '200':
           description: List of chats

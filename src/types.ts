@@ -190,6 +190,8 @@ export interface ChatResource {
     created_at: string; // ISO date-time
     updated_at: string; // ISO date-time
     last_message_at?: string;
+    /** Present only when the request opts in via `with_last_message` (getUserChats). */
+    last_message?: MessageResource;
     owner_id?: string;
     owner?: UserResource;
     metadata?: StringMap;

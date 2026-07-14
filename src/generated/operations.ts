@@ -370,7 +370,7 @@ const userChatsInput = z.object({
             order: z.enum(['asc', 'desc']).optional(),
             read: z.boolean().optional(),
             metadata: z.record(z.string(), z.string()).optional(),
-            with_last_message: z.boolean().optional(),
+            with_last_message: z.union([z.literal(0), z.literal(1)]).optional(),
         })
         .optional(),
 });

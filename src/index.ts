@@ -809,8 +809,10 @@ export class Emby {
         if (_.isFilledPlainObject(query.metadata)) {
             q.metadata = query.metadata as UserChatsQuery['metadata'];
         }
+        // Coerce to integer 0/1 wire — Laravel's `boolean` rule on the backend rejects
+        // the string "true"/"false" that querystring.stringify would emit for a bool.
         if (_.isBoolean(query.with_last_message)) {
-            q.with_last_message = query.with_last_message;
+            q.with_last_message = query.with_last_message ? 1 : 0;
         }
         return this.api.userChats<T>({
             path: { user_id: userId },
