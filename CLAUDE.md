@@ -13,7 +13,7 @@ Anything edited under `src/` is public surface area — version is bumped in `pa
 
 ## Commands
 
-- `npm test` — runs node's built-in test runner on TS sources via `tsx` (273 tests: 3 unit + 13 integration files). No compilation, tests import from `src/` directly.
+- `npm test` — runs node's built-in test runner on TS sources via `tsx` (318 tests: 5 unit + 16 integration files). No compilation, tests import from `src/` directly.
 - `npm run test:live` — opt-in E2E against a real tenant (needs `.env` with `EMBY_API_TOKEN` + `EMBY_BASE_URL`; 50 tests across happy-path / wire-format regressions / edge cases). Suites skip themselves if creds missing. Runs serially via `--test-concurrency=1` because each `before/after` calls `tenant.clearData({ sync: true })` and parallel suites would race-wipe each other. **Never point at production.** See `test/live/README.md`.
 - `npm run typecheck` — `tsc --noEmit` across src + test.
 - `npm run build` — cleans `dist/`, compiles `tsconfig.cjs.json` → `dist/cjs`, `tsconfig.esm.json` → `dist/esm`, then writes `{"type":"commonjs"}` / `{"type":"module"}` stub `package.json` inside each subdir so Node resolves module kind correctly.
@@ -39,7 +39,9 @@ src/
 │   ├── helpers.ts
 │   ├── signing.ts
 │   ├── processUserRights.ts
-│   └── rights.scheme.ts
+│   ├── rights.scheme.ts
+│   ├── requestOptions.ts — options schema/resolver, TimeoutError, RequestControlOptions
+│   └── retry.ts          — retry policy (idempotency, backoff, Retry-After), abortable sleep
 └── generated/            — regenerated from openapi.yml via `npm run generate`
     ├── schemas.ts        — Zod schemas + z.infer types for components.schemas
     └── operations.ts     — createOperations(transport) factory, one fn per operationId
@@ -80,12 +82,20 @@ The query string itself is built with `flatten()` (PHP-style: `user[id]=10`, `us
 
 ### REST client
 
-`requestApi(method, params, type='get', version='v1', query?)` is the single HTTP entry point — uses Node's built-in `http`/`https`, no third-party client.
+`requestApi(method, params, type='get', version='v1', query?, headers?, control?)` is the single HTTP entry point — uses Node's built-in `http`/`https`, no third-party client.
 
 - For **GET / DELETE**: `params` is serialized via `flatten()` + `querystring.stringify` into the URL. Optional `query` is merged on top — handy when a generated wrapper has both path params and URL query.
 - For **POST / PUT**: `params` becomes the JSON body. Optional `query` is appended as URL query string (needed e.g. for `tenant.clearData?sync=true`).
 
 All requests carry `Authorization: Bearer ${apiToken}`. Non-2xx/3xx responses reject with an `Error & { status: number; body: unknown }` — `message` is the stringified body (or raw text), `body` is the parsed JSON when available.
+
+**Reliability** (1.15) — each attempt runs under a timeout and failures are retried per the method's idempotency. Defaults live on the instance (`config.options`, Zod-validated by `resolveRequestOptions` in `libs/requestOptions.ts`) and are overridable per call via the 7th `control` arg:
+
+- **timeout** (default 30000ms; 0 disables) — a per-attempt `AbortController` + `setTimeout` (Node 16 has no `AbortSignal.timeout`); on expiry rejects `TimeoutError`.
+- **retries** (default 2) + **retryDelay** (200ms base) — `runWithRetry` loops attempts; `shouldRetry` (`libs/retry.ts`) allows GET/DELETE on network/5xx/429 but POST/PUT only on 429 + pre-send connection errors (so a write is never duplicated). Exponential backoff + jitter, honoring `Retry-After`.
+- **signal** (per-call only) — merged with the timeout into one controller; a caller cancel rejects with `signal.reason`/`AbortError`, is never retried, and aborts an in-progress backoff (`sleep` is abortable).
+
+The per-call fields (`signal`/`timeout`/`retries`/`retryDelay`) ride every `.api.*` input via `RequestControlOptions`; `pickRequestControl` pulls them out before the Zod parse strips them from the wire payload.
 
 `baseUrl` has trailing slashes stripped in the constructor (`replace(/\/+$/g, '')`); `apiUrl` defaults to `baseUrl` if not provided separately.
 
@@ -124,11 +134,11 @@ sdk.api.chatSendMessage({
 });
 ```
 
-Header params (e.g. `Prefer`) ride a `header:` slot alongside `path`/`query`/`body`.
+Header params (e.g. `Prefer`) ride a `header:` slot alongside `path`/`query`/`body`. Per-call reliability controls (`signal`/`timeout`/`retries`/`retryDelay`) also ride the input object (typed via `RequestControlOptions`); `pickRequestControl` extracts them and they're stripped from the wire payload. See **REST client → Reliability**.
 
 Each method is typed `async <T = XResponse>(...): Promise<T>` — the default `T` is a generated `XResponse` type derived from the operation's `200`/`201` JSON schema (e.g. `ChatListResponse`), so callers get a typed envelope (`{ status, data, pagination, … }`) without passing `<T>`. Responses are **not** Zod-validated at runtime (the SDK is pass-through); `XResponse` is a plain TS type emitted by `emitType`, not a schema. Pass an explicit `<T>` to override.
 
-`Emby` wires it up in its constructor: `this.api = createOperations(this)`. `this` satisfies the `Transport` interface (a 6-arg `requestApi(method, params, type, version, query, headers)`).
+`Emby` wires it up in its constructor: `this.api = createOperations(this)`. `this` satisfies the `Transport` interface (a 7-arg `requestApi(method, params, type, version, query, headers, control)`).
 
 **Generator quirks worth knowing:**
 
@@ -137,7 +147,7 @@ Each method is typed `async <T = XResponse>(...): Promise<T>` — the default `T
 - `oneOf` / `anyOf` → `z.union([...])`. `Avatar` and other discriminated-ish unions ride this path; we don't model strictness, the first matching branch wins.
 - `allOf` → intersection: a single-member `allOf` (the `$ref` + description pattern) collapses to that member; multiple members nest via `z.intersection`.
 - Path-param substitution **does not** call `encodeURIComponent` — `requestApi` runs `encodeURI()` on the full URL, and double-encoding would produce `%252F` instead of `%2F`. This matches the behavior of the hand-written methods.
-- For `PUT`/`POST` operations that also have URL query params, the generator passes the parsed `query` as the 5th arg to `requestApi`; header params (`in: header`) are passed as the 6th arg.
+- For `PUT`/`POST` operations that also have URL query params, the generator passes the parsed `query` as the 5th arg to `requestApi`; header params (`in: header`) as the 6th; per-call control options (`pickRequestControl(input)`) always as the 7th.
 
 ### `openapi.yml` and the live-test feedback loop
 

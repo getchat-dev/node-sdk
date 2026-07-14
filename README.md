@@ -49,6 +49,8 @@ const emby = new Emby({
 });
 ```
 
+Reliability defaults (timeout, retries) are set via `options` — see [Reliability](#reliability).
+
 ---
 
 ## URL signing
@@ -443,6 +445,49 @@ console.log(Object.keys(emby.api).sort());
 
 ---
 
+## Reliability
+
+Every request has a **timeout** and is **retried** on transient failures. Defaults are set once via `options`; any call can override them.
+
+### Defaults
+
+```ts
+const emby = new Emby({
+    api_token: '…',
+    base_url: '…',
+    options: {
+        timeout: 30_000, // per-attempt timeout in ms (0 disables). Default 30000.
+        retries: 2,      // retry attempts after the first failure. Default 2.
+        retryDelay: 200, // base backoff in ms (exponential + jitter). Default 200.
+    },
+});
+```
+
+Invalid values throw at construction (they are Zod-validated).
+
+- **Timeout** — a request that outruns `timeout` aborts and rejects with a `TimeoutError` (`err.name === 'TimeoutError'`, `err.code === 'ETIMEDOUT'`). Without it a stuck backend would hang the caller forever.
+- **Retries** — `GET`/`DELETE` retry on network errors, `5xx` and `429`. `POST`/`PUT` retry **only** on `429` (a `Retry-After` header is honored) and on connection errors that never reached the server — so a write is never silently duplicated. Backoff grows exponentially with jitter.
+
+### Per-call overrides & cancellation
+
+`.api.*` methods accept `signal`, `timeout`, `retries` and `retryDelay` alongside the input:
+
+```ts
+const ac = new AbortController();
+
+const p = emby.api.chatShow({
+    path: { chat_id: 'c1' },
+    signal: ac.signal, // cancel this request
+    timeout: 5_000,    // override the instance timeout, just for this call
+});
+
+ac.abort(); // p rejects with an AbortError; a cancelled request is never retried
+```
+
+These control fields are stripped before the request is sent — they never reach the wire.
+
+---
+
 ## TypeScript
 
 Types ship in the package; consumers get full autocomplete and type-checking out of the box:
@@ -474,3 +519,5 @@ try {
 ```
 
 Zod validation errors from `.api.*` methods throw `ZodError` (synchronous, before HTTP).
+
+A request that times out rejects with a `TimeoutError`; one cancelled via `AbortSignal` rejects with an `AbortError`. Both are distinct from HTTP errors (which carry `.status`) — see [Reliability](#reliability).
