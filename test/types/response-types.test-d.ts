@@ -8,16 +8,29 @@
 import type {
     ChatAddParticipantsResponse,
     ChatCreateResponse,
+    ChatDeleteParticipantRightsResponse,
     ChatDeleteParticipantsResponse,
     ChatDeleteResponse,
+    ChatGetParticipantRightsResponse,
     ChatListResponse,
     ChatMessagesResponse,
     ChatParticipantsResponse,
     ChatSendMessageResponse,
     ChatSendTypingResponse,
+    ChatSetS3CredentialsResponse,
+    ChatSetWebhookResponse,
     ChatShowResponse,
     ChatUpdateMessageResponse,
+    ChatUpdateParticipantRightsResponse,
     ChatUpdateResponse,
+    TenantClearDataResponse,
+    TenantSetFirebaseConfigForJsResponse,
+    TenantSetFirebaseFcmVapidResponse,
+    TenantSetFirebaseServiceAccountResponse,
+    TenantSetPushNotificationsSettingsResponse,
+    TenantSetS3CredentialsResponse,
+    TenantSetWebhookSettingsResponse,
+    UserAddFcmTokenResponse,
     UserChatsResponse,
     UserCreateResponse,
     UserDeleteResponse,
@@ -111,3 +124,75 @@ export type _wGetUser = Expect<Equal<Awaited<WrapperReturns['getUser']>, UserSho
 export type _wUpdateUser = Expect<Equal<Awaited<WrapperReturns['updateUser']>, UserUpdateResponse>>;
 export type _wDeleteUser = Expect<Equal<Awaited<WrapperReturns['deleteUser']>, UserDeleteResponse>>;
 export type _wGetUserChats = Expect<Equal<Awaited<WrapperReturns['getUserChats']>, UserChatsResponse>>;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// `.api.*` methods WITHOUT a hand-written wrapper. Unlike the wrapper defaults
+// above (typed by hand), these `<T = XResponse>` defaults are emitted by the
+// codegen — so each assertion guards against the generator pairing an operation
+// with the wrong response type (a bad typeName in the emitted signature makes
+// the Equal go false, even when the response type is `unknown`).
+//
+// Each method gets a typed placeholder of its own input (`Parameters<fn>[0]`,
+// never constructed) so the call site type-checks without hand-built request
+// bodies; the call site is again what applies the generic default.
+// ─────────────────────────────────────────────────────────────────────────────
+
+type Api = Emby['api'];
+declare const apiInput: { [K in keyof Api]: Parameters<Api[K]>[0] };
+
+export function _apiOnlyReturns() {
+    return {
+        chatGetParticipantRights: emby.api.chatGetParticipantRights(apiInput.chatGetParticipantRights),
+        chatUpdateParticipantRights: emby.api.chatUpdateParticipantRights(apiInput.chatUpdateParticipantRights),
+        chatDeleteParticipantRights: emby.api.chatDeleteParticipantRights(apiInput.chatDeleteParticipantRights),
+        chatSetWebhook: emby.api.chatSetWebhook(apiInput.chatSetWebhook),
+        chatSetS3Credentials: emby.api.chatSetS3Credentials(apiInput.chatSetS3Credentials),
+        userAddFcmToken: emby.api.userAddFcmToken(apiInput.userAddFcmToken),
+        tenantSetS3Credentials: emby.api.tenantSetS3Credentials(apiInput.tenantSetS3Credentials),
+        tenantSetWebhookSettings: emby.api.tenantSetWebhookSettings(apiInput.tenantSetWebhookSettings),
+        tenantSetFirebaseConfigForJs: emby.api.tenantSetFirebaseConfigForJs(apiInput.tenantSetFirebaseConfigForJs),
+        tenantSetFirebaseServiceAccount: emby.api.tenantSetFirebaseServiceAccount(
+            apiInput.tenantSetFirebaseServiceAccount,
+        ),
+        tenantSetFirebaseFcmVapid: emby.api.tenantSetFirebaseFcmVapid(apiInput.tenantSetFirebaseFcmVapid),
+        tenantSetPushNotificationsSettings: emby.api.tenantSetPushNotificationsSettings(
+            apiInput.tenantSetPushNotificationsSettings,
+        ),
+        tenantClearData: emby.api.tenantClearData(apiInput.tenantClearData),
+    };
+}
+type ApiOnlyReturns = ReturnType<typeof _apiOnlyReturns>;
+
+export type _aChatGetParticipantRights = Expect<
+    Equal<Awaited<ApiOnlyReturns['chatGetParticipantRights']>, ChatGetParticipantRightsResponse>
+>;
+export type _aChatUpdateParticipantRights = Expect<
+    Equal<Awaited<ApiOnlyReturns['chatUpdateParticipantRights']>, ChatUpdateParticipantRightsResponse>
+>;
+export type _aChatDeleteParticipantRights = Expect<
+    Equal<Awaited<ApiOnlyReturns['chatDeleteParticipantRights']>, ChatDeleteParticipantRightsResponse>
+>;
+export type _aChatSetWebhook = Expect<Equal<Awaited<ApiOnlyReturns['chatSetWebhook']>, ChatSetWebhookResponse>>;
+export type _aChatSetS3Credentials = Expect<
+    Equal<Awaited<ApiOnlyReturns['chatSetS3Credentials']>, ChatSetS3CredentialsResponse>
+>;
+export type _aUserAddFcmToken = Expect<Equal<Awaited<ApiOnlyReturns['userAddFcmToken']>, UserAddFcmTokenResponse>>;
+export type _aTenantSetS3Credentials = Expect<
+    Equal<Awaited<ApiOnlyReturns['tenantSetS3Credentials']>, TenantSetS3CredentialsResponse>
+>;
+export type _aTenantSetWebhookSettings = Expect<
+    Equal<Awaited<ApiOnlyReturns['tenantSetWebhookSettings']>, TenantSetWebhookSettingsResponse>
+>;
+export type _aTenantSetFirebaseConfigForJs = Expect<
+    Equal<Awaited<ApiOnlyReturns['tenantSetFirebaseConfigForJs']>, TenantSetFirebaseConfigForJsResponse>
+>;
+export type _aTenantSetFirebaseServiceAccount = Expect<
+    Equal<Awaited<ApiOnlyReturns['tenantSetFirebaseServiceAccount']>, TenantSetFirebaseServiceAccountResponse>
+>;
+export type _aTenantSetFirebaseFcmVapid = Expect<
+    Equal<Awaited<ApiOnlyReturns['tenantSetFirebaseFcmVapid']>, TenantSetFirebaseFcmVapidResponse>
+>;
+export type _aTenantSetPushNotificationsSettings = Expect<
+    Equal<Awaited<ApiOnlyReturns['tenantSetPushNotificationsSettings']>, TenantSetPushNotificationsSettingsResponse>
+>;
+export type _aTenantClearData = Expect<Equal<Awaited<ApiOnlyReturns['tenantClearData']>, TenantClearDataResponse>>;
