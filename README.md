@@ -368,6 +368,12 @@ await emby.updateParticipantRights('chat_id', 'user_id', {
 ```
 Overrides a participant's rights for one chat. At least one right is required; booleans accept `true`/`false`/`null`, and `edit_messages`/`delete_messages` are `none|my|any`, `pin_messages` is `none|for_me|for_everyone`.
 
+#### `deleteParticipantRights(chatId, userId)`
+```ts
+await emby.deleteParticipantRights('chat_id', 'user_id');
+```
+Clears **all** of the participant's per-chat overrides at once — they fall back entirely to their signed-link rights.
+
 ### User CRUD wrappers
 
 #### `createUser(user)`

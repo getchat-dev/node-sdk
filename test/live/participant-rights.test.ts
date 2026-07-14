@@ -150,4 +150,17 @@ describe('live: participant rights (get/update round-trip)', { skip: SKIP_REASON
                 : 'send_messages key removed — null clears the override',
         );
     });
+
+    test('delete clears all overrides at once', async (t) => {
+        // Re-set a couple of overrides so there is definitely something to clear.
+        await sdk.updateParticipantRights(chatId, memberId, { send_messages: false, pin_messages: 'for_everyone' });
+
+        const del = await sdk.deleteParticipantRights(chatId, memberId);
+        assert.notEqual(del.status, false, 'deleteParticipantRights returned status=false');
+
+        const got = await sdk.getParticipantRights(chatId, memberId);
+        const rights = (got.rights ?? {}) as Record<string, unknown>;
+        t.diagnostic(`rights after delete-all: ${JSON.stringify(rights)}`);
+        assert.equal(Object.keys(rights).length, 0, `expected all overrides cleared, got ${JSON.stringify(rights)}`);
+    });
 });

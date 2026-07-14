@@ -6,6 +6,7 @@ import {
     type ChatAddParticipantsResponse,
     type ChatCreateInput,
     type ChatCreateResponse,
+    type ChatDeleteParticipantRightsResponse,
     type ChatDeleteParticipantsResponse,
     type ChatDeleteResponse,
     type ChatGetParticipantRightsResponse,
@@ -933,6 +934,26 @@ export class Emby {
         return this.api.chatUpdateParticipantRights<T>({
             path: { chat_id: chatId, user_id: userId },
             body: rights,
+        });
+    }
+
+    /**
+     * Clear **all** of a participant's per-chat right overrides (`DELETE
+     * chats/{chatId}/participants/{userId}/rights`). The participant falls back
+     * entirely to their signed-link rights. Propagates live over the socket.
+     *
+     * @param chatId  Chat id.
+     * @param userId  Participant's user id.
+     */
+    deleteParticipantRights<T = ChatDeleteParticipantRightsResponse>(chatId: string, userId: string): Promise<T> {
+        if (!_.isString(chatId)) {
+            throw new Error("chat id isn't passed");
+        }
+        if (!_.isString(userId)) {
+            throw new Error("user id isn't passed");
+        }
+        return this.api.chatDeleteParticipantRights<T>({
+            path: { chat_id: chatId, user_id: userId },
         });
     }
 
