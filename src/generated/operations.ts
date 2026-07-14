@@ -3,6 +3,7 @@
 
 import { z } from 'zod';
 import * as S from './schemas.js';
+import { pickRequestControl, type RequestControlOptions } from '../libs/requestOptions.js';
 
 export type HttpMethod = 'get' | 'post' | 'put' | 'delete';
 
@@ -14,6 +15,7 @@ export interface Transport {
         version?: string,
         query?: Record<string, unknown>,
         headers?: Record<string, unknown>,
+        control?: RequestControlOptions,
     ): Promise<T>;
 }
 
@@ -35,7 +37,7 @@ const chatListInput = z
             .optional(),
     })
     .optional();
-export type ChatListInput = z.infer<typeof chatListInput>;
+export type ChatListInput = z.infer<typeof chatListInput> & RequestControlOptions;
 export type ChatListResponse = {
     status: boolean;
     chats: Record<string, S.ChatResource>;
@@ -78,7 +80,7 @@ const chatCreateInput = z.object({
         participants: z.array(S.ParticipantInputSchema).max(10).optional(),
     }),
 });
-export type ChatCreateInput = z.infer<typeof chatCreateInput>;
+export type ChatCreateInput = z.infer<typeof chatCreateInput> & RequestControlOptions;
 export type ChatCreateResponse = {
     status?: boolean;
     data?: { chat?: S.ChatResource; participants?: Array<S.ParticipantResource> };
@@ -89,7 +91,7 @@ const chatShowInput = z.object({
         chat_id: z.string(),
     }),
 });
-export type ChatShowInput = z.infer<typeof chatShowInput>;
+export type ChatShowInput = z.infer<typeof chatShowInput> & RequestControlOptions;
 export type ChatShowResponse = { status?: boolean; data?: { chat?: S.ChatResource } };
 
 const chatUpdateInput = z.object({
@@ -116,7 +118,7 @@ const chatUpdateInput = z.object({
             .optional(),
     }),
 });
-export type ChatUpdateInput = z.infer<typeof chatUpdateInput>;
+export type ChatUpdateInput = z.infer<typeof chatUpdateInput> & RequestControlOptions;
 export type ChatUpdateResponse = { status?: boolean; data?: { chat?: S.ChatResource } };
 
 const chatDeleteInput = z.object({
@@ -124,7 +126,7 @@ const chatDeleteInput = z.object({
         chat_id: z.string(),
     }),
 });
-export type ChatDeleteInput = z.infer<typeof chatDeleteInput>;
+export type ChatDeleteInput = z.infer<typeof chatDeleteInput> & RequestControlOptions;
 export type ChatDeleteResponse = { status?: boolean };
 
 const chatParticipantsInput = z.object({
@@ -138,7 +140,7 @@ const chatParticipantsInput = z.object({
         })
         .optional(),
 });
-export type ChatParticipantsInput = z.infer<typeof chatParticipantsInput>;
+export type ChatParticipantsInput = z.infer<typeof chatParticipantsInput> & RequestControlOptions;
 export type ChatParticipantsResponse = {
     participants: Array<S.ParticipantResource>;
     meta: { total?: number; output?: number };
@@ -165,7 +167,7 @@ const chatAddParticipantsInput = z.object({
             .optional(),
     }),
 });
-export type ChatAddParticipantsInput = z.infer<typeof chatAddParticipantsInput>;
+export type ChatAddParticipantsInput = z.infer<typeof chatAddParticipantsInput> & RequestControlOptions;
 export type ChatAddParticipantsResponse = unknown;
 
 const chatGetParticipantRightsInput = z.object({
@@ -174,7 +176,7 @@ const chatGetParticipantRightsInput = z.object({
         user_id: z.string(),
     }),
 });
-export type ChatGetParticipantRightsInput = z.infer<typeof chatGetParticipantRightsInput>;
+export type ChatGetParticipantRightsInput = z.infer<typeof chatGetParticipantRightsInput> & RequestControlOptions;
 export type ChatGetParticipantRightsResponse = { status?: boolean; rights?: Record<string, unknown> };
 
 const chatUpdateParticipantRightsInput = z.object({
@@ -206,7 +208,7 @@ const chatUpdateParticipantRightsInput = z.object({
         })
         .refine((v) => Object.keys(v as object).length >= 1, { message: 'at least 1 property required' }),
 });
-export type ChatUpdateParticipantRightsInput = z.infer<typeof chatUpdateParticipantRightsInput>;
+export type ChatUpdateParticipantRightsInput = z.infer<typeof chatUpdateParticipantRightsInput> & RequestControlOptions;
 export type ChatUpdateParticipantRightsResponse = { status?: boolean };
 
 const chatDeleteParticipantRightsInput = z.object({
@@ -215,7 +217,7 @@ const chatDeleteParticipantRightsInput = z.object({
         user_id: z.string(),
     }),
 });
-export type ChatDeleteParticipantRightsInput = z.infer<typeof chatDeleteParticipantRightsInput>;
+export type ChatDeleteParticipantRightsInput = z.infer<typeof chatDeleteParticipantRightsInput> & RequestControlOptions;
 export type ChatDeleteParticipantRightsResponse = { status?: boolean };
 
 const chatDeleteParticipantsInput = z.object({
@@ -224,7 +226,7 @@ const chatDeleteParticipantsInput = z.object({
         user_id: z.string(),
     }),
 });
-export type ChatDeleteParticipantsInput = z.infer<typeof chatDeleteParticipantsInput>;
+export type ChatDeleteParticipantsInput = z.infer<typeof chatDeleteParticipantsInput> & RequestControlOptions;
 export type ChatDeleteParticipantsResponse = unknown;
 
 const chatMessagesInput = z.object({
@@ -242,7 +244,7 @@ const chatMessagesInput = z.object({
         })
         .optional(),
 });
-export type ChatMessagesInput = z.infer<typeof chatMessagesInput>;
+export type ChatMessagesInput = z.infer<typeof chatMessagesInput> & RequestControlOptions;
 export type ChatMessagesResponse = {
     messages: Record<string, S.MessageResource>;
     messages_sort?: Array<string>;
@@ -287,7 +289,7 @@ const chatSendMessageInput = z.object({
             .max(50),
     }),
 });
-export type ChatSendMessageInput = z.infer<typeof chatSendMessageInput>;
+export type ChatSendMessageInput = z.infer<typeof chatSendMessageInput> & RequestControlOptions;
 export type ChatSendMessageResponse = { status?: boolean; message_ids?: Array<string> };
 
 const chatUpdateMessageInput = z.object({
@@ -317,7 +319,7 @@ const chatUpdateMessageInput = z.object({
         update_extra_mode: z.enum(['merge', 'replace']).optional(),
     }),
 });
-export type ChatUpdateMessageInput = z.infer<typeof chatUpdateMessageInput>;
+export type ChatUpdateMessageInput = z.infer<typeof chatUpdateMessageInput> & RequestControlOptions;
 export type ChatUpdateMessageResponse = { status?: boolean; is_updated?: boolean; message?: S.MessageResource };
 
 const chatSendTypingInput = z.object({
@@ -331,7 +333,7 @@ const chatSendTypingInput = z.object({
         })
         .optional(),
 });
-export type ChatSendTypingInput = z.infer<typeof chatSendTypingInput>;
+export type ChatSendTypingInput = z.infer<typeof chatSendTypingInput> & RequestControlOptions;
 export type ChatSendTypingResponse = unknown;
 
 const chatSetWebhookInput = z.object({
@@ -343,7 +345,7 @@ const chatSetWebhookInput = z.object({
         url: z.url().optional(),
     }),
 });
-export type ChatSetWebhookInput = z.infer<typeof chatSetWebhookInput>;
+export type ChatSetWebhookInput = z.infer<typeof chatSetWebhookInput> & RequestControlOptions;
 export type ChatSetWebhookResponse = unknown;
 
 const chatSetS3CredentialsInput = z.object({
@@ -361,7 +363,7 @@ const chatSetS3CredentialsInput = z.object({
         cdn_url: z.url().optional(),
     }),
 });
-export type ChatSetS3CredentialsInput = z.infer<typeof chatSetS3CredentialsInput>;
+export type ChatSetS3CredentialsInput = z.infer<typeof chatSetS3CredentialsInput> & RequestControlOptions;
 export type ChatSetS3CredentialsResponse = { status?: boolean; modified?: boolean };
 
 const userCreateInput = z.object({
@@ -389,7 +391,7 @@ const userCreateInput = z.object({
         }),
     }),
 });
-export type UserCreateInput = z.infer<typeof userCreateInput>;
+export type UserCreateInput = z.infer<typeof userCreateInput> & RequestControlOptions;
 export type UserCreateResponse = { status?: boolean; data?: { user?: S.UserResource } };
 
 const userShowInput = z.object({
@@ -397,7 +399,7 @@ const userShowInput = z.object({
         user_id: z.string(),
     }),
 });
-export type UserShowInput = z.infer<typeof userShowInput>;
+export type UserShowInput = z.infer<typeof userShowInput> & RequestControlOptions;
 export type UserShowResponse = { status?: boolean; data?: { user?: S.UserResource } };
 
 const userUpdateInput = z.object({
@@ -427,7 +429,7 @@ const userUpdateInput = z.object({
             .optional(),
     }),
 });
-export type UserUpdateInput = z.infer<typeof userUpdateInput>;
+export type UserUpdateInput = z.infer<typeof userUpdateInput> & RequestControlOptions;
 export type UserUpdateResponse = { status?: boolean; data?: { user?: S.UserResource } };
 
 const userDeleteInput = z.object({
@@ -435,7 +437,7 @@ const userDeleteInput = z.object({
         user_id: z.string(),
     }),
 });
-export type UserDeleteInput = z.infer<typeof userDeleteInput>;
+export type UserDeleteInput = z.infer<typeof userDeleteInput> & RequestControlOptions;
 export type UserDeleteResponse = unknown;
 
 const userChatsInput = z.object({
@@ -453,7 +455,7 @@ const userChatsInput = z.object({
         })
         .optional(),
 });
-export type UserChatsInput = z.infer<typeof userChatsInput>;
+export type UserChatsInput = z.infer<typeof userChatsInput> & RequestControlOptions;
 export type UserChatsResponse = {
     chats: Array<S.ChatResource>;
     meta: { total?: number; output?: number };
@@ -476,7 +478,7 @@ const userAddFcmTokenInput = z.object({
         device_fingerprint: z.string().max(255).optional(),
     }),
 });
-export type UserAddFcmTokenInput = z.infer<typeof userAddFcmTokenInput>;
+export type UserAddFcmTokenInput = z.infer<typeof userAddFcmTokenInput> & RequestControlOptions;
 export type UserAddFcmTokenResponse = unknown;
 
 const tenantSetS3CredentialsInput = z.object({
@@ -491,7 +493,7 @@ const tenantSetS3CredentialsInput = z.object({
         cdn_url: z.url().optional(),
     }),
 });
-export type TenantSetS3CredentialsInput = z.infer<typeof tenantSetS3CredentialsInput>;
+export type TenantSetS3CredentialsInput = z.infer<typeof tenantSetS3CredentialsInput> & RequestControlOptions;
 export type TenantSetS3CredentialsResponse = { status?: boolean; modified?: boolean };
 
 const tenantSetWebhookSettingsInput = z.object({
@@ -500,7 +502,7 @@ const tenantSetWebhookSettingsInput = z.object({
         url: z.url().optional(),
     }),
 });
-export type TenantSetWebhookSettingsInput = z.infer<typeof tenantSetWebhookSettingsInput>;
+export type TenantSetWebhookSettingsInput = z.infer<typeof tenantSetWebhookSettingsInput> & RequestControlOptions;
 export type TenantSetWebhookSettingsResponse = unknown;
 
 const tenantSetFirebaseConfigForJsInput = z.object({
@@ -514,7 +516,8 @@ const tenantSetFirebaseConfigForJsInput = z.object({
         measurement_id: z.string().max(255).optional(),
     }),
 });
-export type TenantSetFirebaseConfigForJsInput = z.infer<typeof tenantSetFirebaseConfigForJsInput>;
+export type TenantSetFirebaseConfigForJsInput = z.infer<typeof tenantSetFirebaseConfigForJsInput> &
+    RequestControlOptions;
 export type TenantSetFirebaseConfigForJsResponse = unknown;
 
 const tenantSetFirebaseServiceAccountInput = z.object({
@@ -532,7 +535,8 @@ const tenantSetFirebaseServiceAccountInput = z.object({
         universe_domain: z.string().max(255),
     }),
 });
-export type TenantSetFirebaseServiceAccountInput = z.infer<typeof tenantSetFirebaseServiceAccountInput>;
+export type TenantSetFirebaseServiceAccountInput = z.infer<typeof tenantSetFirebaseServiceAccountInput> &
+    RequestControlOptions;
 export type TenantSetFirebaseServiceAccountResponse = unknown;
 
 const tenantSetFirebaseFcmVapidInput = z.object({
@@ -541,7 +545,7 @@ const tenantSetFirebaseFcmVapidInput = z.object({
         private_key: z.string().max(255),
     }),
 });
-export type TenantSetFirebaseFcmVapidInput = z.infer<typeof tenantSetFirebaseFcmVapidInput>;
+export type TenantSetFirebaseFcmVapidInput = z.infer<typeof tenantSetFirebaseFcmVapidInput> & RequestControlOptions;
 export type TenantSetFirebaseFcmVapidResponse = unknown;
 
 const tenantSetPushNotificationsSettingsInput = z.object({
@@ -551,7 +555,8 @@ const tenantSetPushNotificationsSettingsInput = z.object({
         disabled: z.boolean().optional(),
     }),
 });
-export type TenantSetPushNotificationsSettingsInput = z.infer<typeof tenantSetPushNotificationsSettingsInput>;
+export type TenantSetPushNotificationsSettingsInput = z.infer<typeof tenantSetPushNotificationsSettingsInput> &
+    RequestControlOptions;
 export type TenantSetPushNotificationsSettingsResponse = unknown;
 
 const tenantClearDataInput = z
@@ -563,7 +568,7 @@ const tenantClearDataInput = z
             .optional(),
     })
     .optional();
-export type TenantClearDataInput = z.infer<typeof tenantClearDataInput>;
+export type TenantClearDataInput = z.infer<typeof tenantClearDataInput> & RequestControlOptions;
 export type TenantClearDataResponse = { status?: boolean };
 
 export function createOperations(transport: Transport) {
@@ -571,59 +576,66 @@ export function createOperations(transport: Transport) {
         /** List chats */
         chatList: async <T = ChatListResponse>(input?: ChatListInput): Promise<T> => {
             const parsed = chatListInput.parse(input);
+            const control = pickRequestControl(input);
             const url = 'chats';
             const query = (parsed as { query?: Record<string, unknown> } | undefined)?.query;
-            return transport.requestApi<T>(url, query, 'get');
+            return transport.requestApi<T>(url, query, 'get', undefined, undefined, undefined, control);
         },
 
         /** Create a new chat */
         chatCreate: async <T = ChatCreateResponse>(input: ChatCreateInput): Promise<T> => {
             const parsed = chatCreateInput.parse(input);
+            const control = pickRequestControl(input);
             const url = 'chats';
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
             const query = (parsed as { query?: Record<string, unknown> } | undefined)?.query;
             const header = (parsed as { header?: Record<string, unknown> } | undefined)?.header;
-            return transport.requestApi<T>(url, body, 'post', undefined, query, header);
+            return transport.requestApi<T>(url, body, 'post', undefined, query, header, control);
         },
 
         /** Get chat details */
         chatShow: async <T = ChatShowResponse>(input: ChatShowInput): Promise<T> => {
             const parsed = chatShowInput.parse(input);
+            const control = pickRequestControl(input);
             const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}`;
-            return transport.requestApi<T>(url, undefined, 'get');
+            return transport.requestApi<T>(url, undefined, 'get', undefined, undefined, undefined, control);
         },
 
         /** Update chat */
         chatUpdate: async <T = ChatUpdateResponse>(input: ChatUpdateInput): Promise<T> => {
             const parsed = chatUpdateInput.parse(input);
+            const control = pickRequestControl(input);
             const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}`;
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
             const query = (parsed as { query?: Record<string, unknown> } | undefined)?.query;
             const header = (parsed as { header?: Record<string, unknown> } | undefined)?.header;
-            return transport.requestApi<T>(url, body, 'put', undefined, query, header);
+            return transport.requestApi<T>(url, body, 'put', undefined, query, header, control);
         },
 
         /** Delete chat */
         chatDelete: async <T = ChatDeleteResponse>(input: ChatDeleteInput): Promise<T> => {
             const parsed = chatDeleteInput.parse(input);
+            const control = pickRequestControl(input);
             const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}`;
-            return transport.requestApi<T>(url, undefined, 'delete');
+            return transport.requestApi<T>(url, undefined, 'delete', undefined, undefined, undefined, control);
         },
 
         /** List chat participants */
         chatParticipants: async <T = ChatParticipantsResponse>(input: ChatParticipantsInput): Promise<T> => {
             const parsed = chatParticipantsInput.parse(input);
+            const control = pickRequestControl(input);
             const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}/participants`;
             const query = (parsed as { query?: Record<string, unknown> } | undefined)?.query;
-            return transport.requestApi<T>(url, query, 'get');
+            return transport.requestApi<T>(url, query, 'get', undefined, undefined, undefined, control);
         },
 
         /** Add participants to chat */
         chatAddParticipants: async <T = ChatAddParticipantsResponse>(input: ChatAddParticipantsInput): Promise<T> => {
             const parsed = chatAddParticipantsInput.parse(input);
+            const control = pickRequestControl(input);
             const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}/participants`;
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
-            return transport.requestApi<T>(url, body, 'post');
+            return transport.requestApi<T>(url, body, 'post', undefined, undefined, undefined, control);
         },
 
         /** Get participant's per-chat rights */
@@ -631,8 +643,9 @@ export function createOperations(transport: Transport) {
             input: ChatGetParticipantRightsInput,
         ): Promise<T> => {
             const parsed = chatGetParticipantRightsInput.parse(input);
+            const control = pickRequestControl(input);
             const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}/participants/${String((parsed as { path: Record<string, unknown> }).path['user_id'])}/rights`;
-            return transport.requestApi<T>(url, undefined, 'get');
+            return transport.requestApi<T>(url, undefined, 'get', undefined, undefined, undefined, control);
         },
 
         /** Override participant rights for this chat */
@@ -640,9 +653,10 @@ export function createOperations(transport: Transport) {
             input: ChatUpdateParticipantRightsInput,
         ): Promise<T> => {
             const parsed = chatUpdateParticipantRightsInput.parse(input);
+            const control = pickRequestControl(input);
             const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}/participants/${String((parsed as { path: Record<string, unknown> }).path['user_id'])}/rights`;
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
-            return transport.requestApi<T>(url, body, 'put');
+            return transport.requestApi<T>(url, body, 'put', undefined, undefined, undefined, control);
         },
 
         /** Clear all participant rights for this chat */
@@ -650,8 +664,9 @@ export function createOperations(transport: Transport) {
             input: ChatDeleteParticipantRightsInput,
         ): Promise<T> => {
             const parsed = chatDeleteParticipantRightsInput.parse(input);
+            const control = pickRequestControl(input);
             const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}/participants/${String((parsed as { path: Record<string, unknown> }).path['user_id'])}/rights`;
-            return transport.requestApi<T>(url, undefined, 'delete');
+            return transport.requestApi<T>(url, undefined, 'delete', undefined, undefined, undefined, control);
         },
 
         /** Remove participant from chat */
@@ -659,50 +674,56 @@ export function createOperations(transport: Transport) {
             input: ChatDeleteParticipantsInput,
         ): Promise<T> => {
             const parsed = chatDeleteParticipantsInput.parse(input);
+            const control = pickRequestControl(input);
             const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}/participants/${String((parsed as { path: Record<string, unknown> }).path['user_id'])}`;
-            return transport.requestApi<T>(url, undefined, 'delete');
+            return transport.requestApi<T>(url, undefined, 'delete', undefined, undefined, undefined, control);
         },
 
         /** List messages in chat */
         chatMessages: async <T = ChatMessagesResponse>(input: ChatMessagesInput): Promise<T> => {
             const parsed = chatMessagesInput.parse(input);
+            const control = pickRequestControl(input);
             const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}/messages`;
             const query = (parsed as { query?: Record<string, unknown> } | undefined)?.query;
-            return transport.requestApi<T>(url, query, 'get');
+            return transport.requestApi<T>(url, query, 'get', undefined, undefined, undefined, control);
         },
 
         /** Send messages to chat */
         chatSendMessage: async <T = ChatSendMessageResponse>(input: ChatSendMessageInput): Promise<T> => {
             const parsed = chatSendMessageInput.parse(input);
+            const control = pickRequestControl(input);
             const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}/messages`;
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
-            return transport.requestApi<T>(url, body, 'post');
+            return transport.requestApi<T>(url, body, 'post', undefined, undefined, undefined, control);
         },
 
         /** Update message */
         chatUpdateMessage: async <T = ChatUpdateMessageResponse>(input: ChatUpdateMessageInput): Promise<T> => {
             const parsed = chatUpdateMessageInput.parse(input);
+            const control = pickRequestControl(input);
             const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}/messages/${String((parsed as { path: Record<string, unknown> }).path['message'])}`;
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
             const query = (parsed as { query?: Record<string, unknown> } | undefined)?.query;
             const header = (parsed as { header?: Record<string, unknown> } | undefined)?.header;
-            return transport.requestApi<T>(url, body, 'put', undefined, query, header);
+            return transport.requestApi<T>(url, body, 'put', undefined, query, header, control);
         },
 
         /** Send typing indicator */
         chatSendTyping: async <T = ChatSendTypingResponse>(input: ChatSendTypingInput): Promise<T> => {
             const parsed = chatSendTypingInput.parse(input);
+            const control = pickRequestControl(input);
             const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}/typing/${String((parsed as { path: Record<string, unknown> }).path['user_id'])}`;
             const query = (parsed as { query?: Record<string, unknown> } | undefined)?.query;
-            return transport.requestApi<T>(url, undefined, 'put', undefined, query);
+            return transport.requestApi<T>(url, undefined, 'put', undefined, query, undefined, control);
         },
 
         /** Set chat webhook settings */
         chatSetWebhook: async <T = ChatSetWebhookResponse>(input: ChatSetWebhookInput): Promise<T> => {
             const parsed = chatSetWebhookInput.parse(input);
+            const control = pickRequestControl(input);
             const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}/webhook`;
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
-            return transport.requestApi<T>(url, body, 'put');
+            return transport.requestApi<T>(url, body, 'put', undefined, undefined, undefined, control);
         },
 
         /** Set S3 credentials for chat */
@@ -710,59 +731,66 @@ export function createOperations(transport: Transport) {
             input: ChatSetS3CredentialsInput,
         ): Promise<T> => {
             const parsed = chatSetS3CredentialsInput.parse(input);
+            const control = pickRequestControl(input);
             const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}/s3-credentials`;
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
-            return transport.requestApi<T>(url, body, 'put');
+            return transport.requestApi<T>(url, body, 'put', undefined, undefined, undefined, control);
         },
 
         /** Create user */
         userCreate: async <T = UserCreateResponse>(input: UserCreateInput): Promise<T> => {
             const parsed = userCreateInput.parse(input);
+            const control = pickRequestControl(input);
             const url = 'users';
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
             const query = (parsed as { query?: Record<string, unknown> } | undefined)?.query;
             const header = (parsed as { header?: Record<string, unknown> } | undefined)?.header;
-            return transport.requestApi<T>(url, body, 'post', undefined, query, header);
+            return transport.requestApi<T>(url, body, 'post', undefined, query, header, control);
         },
 
         /** Get user details */
         userShow: async <T = UserShowResponse>(input: UserShowInput): Promise<T> => {
             const parsed = userShowInput.parse(input);
+            const control = pickRequestControl(input);
             const url = `users/${String((parsed as { path: Record<string, unknown> }).path['user_id'])}`;
-            return transport.requestApi<T>(url, undefined, 'get');
+            return transport.requestApi<T>(url, undefined, 'get', undefined, undefined, undefined, control);
         },
 
         /** Update user */
         userUpdate: async <T = UserUpdateResponse>(input: UserUpdateInput): Promise<T> => {
             const parsed = userUpdateInput.parse(input);
+            const control = pickRequestControl(input);
             const url = `users/${String((parsed as { path: Record<string, unknown> }).path['user_id'])}`;
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
             const query = (parsed as { query?: Record<string, unknown> } | undefined)?.query;
             const header = (parsed as { header?: Record<string, unknown> } | undefined)?.header;
-            return transport.requestApi<T>(url, body, 'put', undefined, query, header);
+            return transport.requestApi<T>(url, body, 'put', undefined, query, header, control);
         },
 
         /** Delete user */
         userDelete: async <T = UserDeleteResponse>(input: UserDeleteInput): Promise<T> => {
             const parsed = userDeleteInput.parse(input);
+            const control = pickRequestControl(input);
             const url = `users/${String((parsed as { path: Record<string, unknown> }).path['user_id'])}`;
-            return transport.requestApi<T>(url, undefined, 'delete');
+            return transport.requestApi<T>(url, undefined, 'delete', undefined, undefined, undefined, control);
         },
 
         /** Get user chats */
         userChats: async <T = UserChatsResponse>(input: UserChatsInput): Promise<T> => {
             const parsed = userChatsInput.parse(input);
+            const control = pickRequestControl(input);
             const url = `users/${String((parsed as { path: Record<string, unknown> }).path['user_id'])}/chats`;
             const query = (parsed as { query?: Record<string, unknown> } | undefined)?.query;
-            return transport.requestApi<T>(url, query, 'get');
+            return transport.requestApi<T>(url, query, 'get', undefined, undefined, undefined, control);
         },
 
         /** Add FCM token */
         userAddFcmToken: async <T = UserAddFcmTokenResponse>(input: UserAddFcmTokenInput): Promise<T> => {
             const parsed = userAddFcmTokenInput.parse(input);
+            const control = pickRequestControl(input);
             const url = `users/${String((parsed as { path: Record<string, unknown> }).path['user_id'])}/fcm_tokens`;
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
-            return transport.requestApi<T>(url, body, 'post');
+            return transport.requestApi<T>(url, body, 'post', undefined, undefined, undefined, control);
         },
 
         /** Set tenant S3 credentials */
@@ -770,9 +798,10 @@ export function createOperations(transport: Transport) {
             input: TenantSetS3CredentialsInput,
         ): Promise<T> => {
             const parsed = tenantSetS3CredentialsInput.parse(input);
+            const control = pickRequestControl(input);
             const url = 's3-credentials';
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
-            return transport.requestApi<T>(url, body, 'put');
+            return transport.requestApi<T>(url, body, 'put', undefined, undefined, undefined, control);
         },
 
         /** Set tenant webhook settings */
@@ -780,9 +809,10 @@ export function createOperations(transport: Transport) {
             input: TenantSetWebhookSettingsInput,
         ): Promise<T> => {
             const parsed = tenantSetWebhookSettingsInput.parse(input);
+            const control = pickRequestControl(input);
             const url = 'webhook';
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
-            return transport.requestApi<T>(url, body, 'put');
+            return transport.requestApi<T>(url, body, 'put', undefined, undefined, undefined, control);
         },
 
         /** Set Firebase config for JS */
@@ -790,9 +820,10 @@ export function createOperations(transport: Transport) {
             input: TenantSetFirebaseConfigForJsInput,
         ): Promise<T> => {
             const parsed = tenantSetFirebaseConfigForJsInput.parse(input);
+            const control = pickRequestControl(input);
             const url = 'firebase/js_config';
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
-            return transport.requestApi<T>(url, body, 'put');
+            return transport.requestApi<T>(url, body, 'put', undefined, undefined, undefined, control);
         },
 
         /** Set Firebase service account */
@@ -800,9 +831,10 @@ export function createOperations(transport: Transport) {
             input: TenantSetFirebaseServiceAccountInput,
         ): Promise<T> => {
             const parsed = tenantSetFirebaseServiceAccountInput.parse(input);
+            const control = pickRequestControl(input);
             const url = 'firebase/svc_acc_credentials';
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
-            return transport.requestApi<T>(url, body, 'put');
+            return transport.requestApi<T>(url, body, 'put', undefined, undefined, undefined, control);
         },
 
         /** Set Firebase FCM VAPID */
@@ -810,9 +842,10 @@ export function createOperations(transport: Transport) {
             input: TenantSetFirebaseFcmVapidInput,
         ): Promise<T> => {
             const parsed = tenantSetFirebaseFcmVapidInput.parse(input);
+            const control = pickRequestControl(input);
             const url = 'firebase/fcm_vapid';
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
-            return transport.requestApi<T>(url, body, 'put');
+            return transport.requestApi<T>(url, body, 'put', undefined, undefined, undefined, control);
         },
 
         /** Set push notification settings */
@@ -820,17 +853,19 @@ export function createOperations(transport: Transport) {
             input: TenantSetPushNotificationsSettingsInput,
         ): Promise<T> => {
             const parsed = tenantSetPushNotificationsSettingsInput.parse(input);
+            const control = pickRequestControl(input);
             const url = 'settings/push-notifications';
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
-            return transport.requestApi<T>(url, body, 'put');
+            return transport.requestApi<T>(url, body, 'put', undefined, undefined, undefined, control);
         },
 
         /** Clear tenant data */
         tenantClearData: async <T = TenantClearDataResponse>(input?: TenantClearDataInput): Promise<T> => {
             const parsed = tenantClearDataInput.parse(input);
+            const control = pickRequestControl(input);
             const url = 'clear';
             const query = (parsed as { query?: Record<string, unknown> } | undefined)?.query;
-            return transport.requestApi<T>(url, undefined, 'put', undefined, query);
+            return transport.requestApi<T>(url, undefined, 'put', undefined, query, undefined, control);
         },
     };
 }

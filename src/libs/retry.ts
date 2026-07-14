@@ -72,6 +72,30 @@ export function backoffDelay(
     return Math.min(jittered, MAX_BACKOFF_MS);
 }
 
-export function sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
+function abortError(signal?: AbortSignal): unknown {
+    // AbortSignal.reason exists on Node 17+; fall back to a named Error on Node 16.
+    const reason = signal?.reason;
+    if (reason !== undefined) return reason;
+    const e = new Error('The operation was aborted');
+    e.name = 'AbortError';
+    return e;
+}
+
+/** Sleep for `ms`, rejecting early with the abort reason if `signal` fires. */
+export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+    return new Promise((resolve, reject) => {
+        if (signal?.aborted) {
+            reject(abortError(signal));
+            return;
+        }
+        const onAbort = () => {
+            clearTimeout(timer);
+            reject(abortError(signal));
+        };
+        const timer = setTimeout(() => {
+            signal?.removeEventListener('abort', onAbort);
+            resolve();
+        }, ms);
+        signal?.addEventListener('abort', onAbort, { once: true });
+    });
 }

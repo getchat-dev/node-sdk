@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { resolveRequestOptions, TimeoutError } from '../../src/libs/requestOptions';
+import { pickRequestControl, resolveRequestOptions, TimeoutError } from '../../src/libs/requestOptions';
 
 describe('resolveRequestOptions', () => {
     test('fills defaults when unset', () => {
@@ -45,5 +45,24 @@ describe('TimeoutError', () => {
         assert.equal(e.code, 'ETIMEDOUT');
         assert.equal(e.timeoutMs, 1000);
         assert.match(e.message, /chats\/c1.*1000ms/);
+    });
+});
+
+describe('pickRequestControl', () => {
+    test('returns {} for non-objects', () => {
+        assert.deepEqual(pickRequestControl(undefined), {});
+        assert.deepEqual(pickRequestControl(null), {});
+        assert.deepEqual(pickRequestControl('nope'), {});
+    });
+
+    test('picks only the control keys that are present', () => {
+        const signal = new AbortController().signal;
+        assert.deepEqual(pickRequestControl({ path: { chat_id: 'c1' }, timeout: 5, signal, retries: 2 }), {
+            timeout: 5,
+            signal,
+            retries: 2,
+        });
+        assert.deepEqual(pickRequestControl({ path: { chat_id: 'c1' } }), {}); // no control keys
+        assert.deepEqual(pickRequestControl({ timeout: undefined }), {}); // undefined ignored
     });
 });

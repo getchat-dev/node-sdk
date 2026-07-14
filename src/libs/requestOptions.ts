@@ -33,3 +33,32 @@ export class TimeoutError extends Error {
         this.name = 'TimeoutError';
     }
 }
+
+/**
+ * Per-call transport controls, mixed into every generated `.api.*` input so a
+ * single request can carry a cancellation signal and override the instance
+ * timeout/retry settings. Stripped from the wire payload before sending.
+ */
+export interface RequestControlOptions {
+    /** Abort the request (and any pending retry backoff) when this signal fires. */
+    signal?: AbortSignal;
+    /** Override the instance `timeout` (ms) for this call. */
+    timeout?: number;
+    /** Override the instance `retries` for this call. */
+    retries?: number;
+    /** Override the instance `retryDelay` (ms) for this call. */
+    retryDelay?: number;
+}
+
+const CONTROL_KEYS = ['signal', 'timeout', 'retries', 'retryDelay'] as const;
+
+/** Extract the per-call control options from a generated `.api.*` input object. */
+export function pickRequestControl(input: unknown): RequestControlOptions {
+    if (input === null || typeof input !== 'object') return {};
+    const src = input as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    for (const key of CONTROL_KEYS) {
+        if (src[key] !== undefined) out[key] = src[key];
+    }
+    return out as RequestControlOptions;
+}

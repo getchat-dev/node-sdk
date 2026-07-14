@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { backoffDelay, isIdempotent, MAX_BACKOFF_MS, parseRetryAfter, shouldRetry } from '../../src/libs/retry';
+import { backoffDelay, isIdempotent, MAX_BACKOFF_MS, parseRetryAfter, shouldRetry, sleep } from '../../src/libs/retry';
 
 describe('isIdempotent', () => {
     test('GET/DELETE are idempotent; POST/PUT are not', () => {
@@ -91,5 +91,24 @@ describe('backoffDelay', () => {
             backoffDelay(30, 200, undefined, () => 0),
             MAX_BACKOFF_MS,
         );
+    });
+});
+
+describe('sleep', () => {
+    test('resolves after the delay', async () => {
+        await sleep(1);
+    });
+
+    test('rejects immediately when the signal is already aborted', async () => {
+        const ac = new AbortController();
+        ac.abort();
+        await assert.rejects(sleep(1000, ac.signal));
+    });
+
+    test('rejects when the signal fires during the wait', async () => {
+        const ac = new AbortController();
+        const p = sleep(1000, ac.signal);
+        setTimeout(() => ac.abort(), 5);
+        await assert.rejects(p);
     });
 });

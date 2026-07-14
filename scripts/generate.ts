@@ -401,6 +401,7 @@ function emitOperationsFile(operations: CollectedOp[]): string {
     parts.push('');
     parts.push("import { z } from 'zod';");
     parts.push("import * as S from './schemas.js';");
+    parts.push("import { pickRequestControl, type RequestControlOptions } from '../libs/requestOptions.js';");
     parts.push('');
 
     // Transport interface
@@ -414,6 +415,7 @@ function emitOperationsFile(operations: CollectedOp[]): string {
     parts.push('        version?: string,');
     parts.push('        query?: Record<string, unknown>,');
     parts.push('        headers?: Record<string, unknown>,');
+    parts.push('        control?: RequestControlOptions,');
     parts.push('    ): Promise<T>;');
     parts.push('}');
     parts.push('');
@@ -468,7 +470,7 @@ function emitOperationsFile(operations: CollectedOp[]): string {
         schemaExpr = schemaExpr.replace(/(?<![\w.])([A-Z]\w*)Schema\b/g, 'S.$1Schema');
 
         parts.push(`const ${op.name}Input = ${schemaExpr};`);
-        parts.push(`export type ${op.typeName}Input = z.infer<typeof ${op.name}Input>;`);
+        parts.push(`export type ${op.typeName}Input = z.infer<typeof ${op.name}Input> & RequestControlOptions;`);
         // Response type from the 200/201 JSON schema (pass-through, not validated).
         const responseType = op.responseSchema ? emitType(op.responseSchema) : 'unknown';
         parts.push(`export type ${op.typeName}Response = ${responseType};`);
@@ -486,6 +488,7 @@ function emitOperationsFile(operations: CollectedOp[]): string {
         if (op.summary) parts.push(`        /** ${op.summary} */`);
         parts.push(`        ${op.name}: async <T = ${op.typeName}Response>(${inputParam}): Promise<T> => {`);
         parts.push(`            const parsed = ${op.name}Input.parse(input);`);
+        parts.push('            const control = pickRequestControl(input);');
 
         // Build URL. NOTE: we intentionally do NOT encodeURIComponent here — requestApi does
         // encodeURI() on the full URL. Matches the behavior of the hand-written methods
@@ -503,9 +506,9 @@ function emitOperationsFile(operations: CollectedOp[]): string {
 
         // Assemble the requestApi call. parsed may be `undefined` when the whole input is
         // optional, so each slot is read behind a `{ slot?: ... } | undefined` shape-cast.
-        // Arg order: (url, params, method, version, query, headers). For GET/DELETE the
-        // query rides `params` (serialized into the URL); for POST/PUT `params` is the JSON
-        // body and query/headers ride the trailing slots. Trailing `undefined`s are trimmed.
+        // Arg order: (url, params, method, version, query, headers, control). For GET/DELETE
+        // the query rides `params` (serialized into the URL); for POST/PUT `params` is the
+        // JSON body and query/headers ride the trailing slots; `control` is always last.
         const isBodyMethod = op.method === 'post' || op.method === 'put';
         const hasBody = isBodyMethod && op.bodySchema;
         const hasQuery = op.queryParams.length > 0;
@@ -530,8 +533,9 @@ function emitOperationsFile(operations: CollectedOp[]): string {
             headerArg = 'header';
         }
 
-        const callArgs = ['url', paramsArg, `'${op.method}'`, 'undefined', queryArg, headerArg];
-        while (callArgs.length > 3 && callArgs[callArgs.length - 1] === 'undefined') callArgs.pop();
+        // `control` (per-call options) is always the trailing arg, so the earlier
+        // slots are emitted explicitly (no trailing-undefined trimming).
+        const callArgs = ['url', paramsArg, `'${op.method}'`, 'undefined', queryArg, headerArg, 'control'];
         parts.push(`            return transport.requestApi<T>(${callArgs.join(', ')});`);
 
         parts.push('        },');

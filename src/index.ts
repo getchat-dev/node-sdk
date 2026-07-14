@@ -45,7 +45,12 @@ type UserChatsQuery = NonNullable<NonNullable<UserChatsInput>['query']>;
 
 import * as _ from './libs/helpers.js';
 import processUserRights from './libs/processUserRights.js';
-import { type ResolvedRequestOptions, resolveRequestOptions, TimeoutError } from './libs/requestOptions.js';
+import {
+    type RequestControlOptions,
+    type ResolvedRequestOptions,
+    resolveRequestOptions,
+    TimeoutError,
+} from './libs/requestOptions.js';
 import { backoffDelay, parseRetryAfter, shouldRetry, sleep } from './libs/retry.js';
 import {
     addToSignature,
@@ -186,6 +191,7 @@ export class Emby {
         version = 'v1',
         query?: Record<string, unknown>,
         headers?: Record<string, unknown>,
+        control?: RequestControlOptions,
     ): Promise<T> {
         let sParams = '';
 
@@ -222,25 +228,40 @@ export class Emby {
             sParams = JSON.stringify(params);
         }
 
-        const { timeout, retries, retryDelay } = this.requestOptions;
+        // Per-call options override the instance defaults for this request.
+        const signal = control?.signal;
+        const timeout = control?.timeout ?? this.requestOptions.timeout;
+        const retries = control?.retries ?? this.requestOptions.retries;
+        const retryDelay = control?.retryDelay ?? this.requestOptions.retryDelay;
 
         const attempt = () =>
             new Promise<T>((resolve, reject) => {
                 const transport = urlObj.protocol === 'https:' ? https : http;
 
-                // A per-attempt timeout aborts the request via this controller. Node 16
-                // has no AbortSignal.timeout, so we drive it with a plain timer.
+                // Node 16 has no AbortSignal.timeout/any, so one controller is aborted
+                // by whichever fires first: the timeout timer or the caller's signal.
                 const controller = new AbortController();
                 options.signal = controller.signal;
 
+                const onExternalAbort = () => controller.abort();
+                if (signal) {
+                    if (signal.aborted) controller.abort();
+                    else signal.addEventListener('abort', onExternalAbort, { once: true });
+                }
+
+                let timedOut = false;
                 let timer: NodeJS.Timeout | undefined;
                 if (timeout > 0) {
-                    timer = setTimeout(() => controller.abort(), timeout);
+                    timer = setTimeout(() => {
+                        timedOut = true;
+                        controller.abort();
+                    }, timeout);
                     // A pending timeout must not keep the process alive.
                     timer.unref();
                 }
-                const clearTimer = () => {
+                const cleanup = () => {
                     if (timer) clearTimeout(timer);
+                    if (signal) signal.removeEventListener('abort', onExternalAbort);
                 };
 
                 const request = transport
@@ -251,7 +272,7 @@ export class Emby {
                             body = `${body}${chunk}`;
                         });
                         res.on('end', () => {
-                            clearTimer();
+                            cleanup();
                             const contentType = res.headers['content-type'];
                             if (contentType?.startsWith('application/json')) {
                                 try {
@@ -280,9 +301,11 @@ export class Emby {
                         });
                     })
                     .on('error', (e) => {
-                        clearTimer();
-                        // The only thing that aborts the controller (so far) is the timeout.
-                        reject(controller.signal.aborted ? new TimeoutError(timeout, method) : e);
+                        cleanup();
+                        // Caller cancellation vs timeout vs a real transport error.
+                        if (signal?.aborted) reject(signal.reason ?? e);
+                        else if (timedOut) reject(new TimeoutError(timeout, method));
+                        else reject(e);
                     });
 
                 if (sParams.length) {
@@ -292,7 +315,7 @@ export class Emby {
                 request.end();
             });
 
-        return this.runWithRetry(attempt, type, retries, retryDelay);
+        return this.runWithRetry(attempt, type, retries, retryDelay, signal);
     }
 
     /** Run `attempt`, retrying failures per the method's idempotency + backoff options. */
@@ -301,16 +324,20 @@ export class Emby {
         method: HttpMethod,
         retries: number,
         retryDelay: number,
+        signal?: AbortSignal,
     ): Promise<T> {
+        const total = Math.max(1, retries + 1);
         let lastError: unknown;
-        for (let n = 0; n <= retries; n++) {
+        for (let n = 0; n < total; n++) {
             try {
                 return await attempt();
             } catch (err) {
                 lastError = err;
-                if (n === retries || !shouldRetry(method, err)) break;
+                if (signal?.aborted) throw err; // caller cancelled — never retry
+                if (n + 1 >= total || !shouldRetry(method, err)) break;
                 const headers = (err as { headers?: http.IncomingHttpHeaders }).headers;
-                await sleep(backoffDelay(n, retryDelay, parseRetryAfter(headers?.['retry-after'])));
+                // A cancel during the backoff wait rejects the sleep and propagates out.
+                await sleep(backoffDelay(n, retryDelay, parseRetryAfter(headers?.['retry-after'])), signal);
             }
         }
         throw lastError;
