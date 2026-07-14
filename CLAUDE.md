@@ -48,8 +48,11 @@ test/
 ├── helpers/              — mockServer, sdkFactory, loadFixture, seededRandom
 ├── unit/*.test.ts        — helpers, signing, processUserRights
 ├── integration/*.test.ts — per-method tests against in-process mock server
-├── types/*.test-d.ts     — compile-time type assertions (response types, wrapper defaults);
-│                           enforced by `npm run typecheck`, NOT run by `node --test`
+├── types/*.test-d.ts     — compile-time type assertions, enforced by `npm run typecheck`,
+│                           NOT run by `node --test`. `response-types` pins the response-type
+│                           defaults (all 30 ops + wrappers); `input-types` freezes the public
+│                           wrapper signatures and the `.api.*` input contract (+ `<T>` override,
+│                           `Avatar` oneOf, `requestApi` staying `unknown`)
 ├── fixtures/             — JSON response fixtures
 └── live/                 — opt-in E2E against real backend (happy-path, wire-format, edge-cases)
 
