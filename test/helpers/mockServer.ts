@@ -68,6 +68,14 @@ export function startMockServer(): Promise<MockServer> {
                 await new Promise<void>((r) => setTimeout(r, next.delayMs));
             }
 
+            // The client may have aborted during the delay (e.g. a timeout test);
+            // writing to a dead socket would throw. Check `res.destroyed` (socket
+            // gone) — NOT `req.destroyed`, which is simply true once a GET's (empty)
+            // body has been consumed and does not mean the client left.
+            if (res.destroyed) {
+                return;
+            }
+
             if (next.closeSocket) {
                 req.socket.destroy();
                 return;
@@ -116,7 +124,12 @@ export function startMockServer(): Promise<MockServer> {
                     return responses.length;
                 },
                 close() {
-                    return new Promise<void>((r) => server.close(() => r()));
+                    return new Promise<void>((r) => {
+                        // Force-drop any lingering (e.g. aborted) connections first,
+                        // otherwise close() can wait on a half-open socket forever.
+                        server.closeAllConnections?.();
+                        server.close(() => r());
+                    });
                 },
                 reset() {
                     requests.length = 0;

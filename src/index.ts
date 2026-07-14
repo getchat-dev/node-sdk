@@ -45,6 +45,7 @@ type UserChatsQuery = NonNullable<NonNullable<UserChatsInput>['query']>;
 
 import * as _ from './libs/helpers.js';
 import processUserRights from './libs/processUserRights.js';
+import { type ResolvedRequestOptions, resolveRequestOptions, TimeoutError } from './libs/requestOptions.js';
 import {
     addToSignature,
     appendLegacy,
@@ -73,12 +74,26 @@ import type {
     UserRights,
 } from './types.js';
 
+/**
+ * Request-reliability options, passed once at construction under `options`.
+ * Values are Zod-validated (see `resolveRequestOptions`) — bad input throws.
+ */
+export interface EmbyRequestOptions {
+    /**
+     * Per-attempt timeout in milliseconds before the request is aborted and the
+     * promise rejects with a `TimeoutError`. `0` disables it. Defaults to `30000`.
+     */
+    timeout?: number;
+}
+
 export interface EmbyConfig {
     id?: string;
     secret?: string;
     api_token?: string;
     base_url?: string;
     api_url?: string;
+    /** Request-reliability options (timeout, …). See {@link EmbyRequestOptions}. */
+    options?: EmbyRequestOptions;
 }
 
 export type HttpMethod = 'get' | 'post' | 'put' | 'delete';
@@ -135,6 +150,9 @@ export class Emby {
      */
     readonly api: Operations;
 
+    /** Validated request-reliability options (timeout, …), resolved at construction. */
+    readonly requestOptions: ResolvedRequestOptions;
+
     constructor(config: EmbyConfig = {}) {
         this.clientId = config.id;
         this.clientSecret = config.secret;
@@ -145,6 +163,9 @@ export class Emby {
         if (_.isString(this.baseUrl)) {
             this.baseUrl = this.baseUrl.replace(/\/+$/g, '');
         }
+
+        // Throws a ZodError on invalid options (e.g. a negative timeout).
+        this.requestOptions = resolveRequestOptions(config.options);
 
         this.api = createOperations(this);
     }
@@ -192,8 +213,26 @@ export class Emby {
             sParams = JSON.stringify(params);
         }
 
+        const { timeout } = this.requestOptions;
+
         return new Promise<T>((resolve, reject) => {
             const transport = urlObj.protocol === 'https:' ? https : http;
+
+            // A per-attempt timeout aborts the request via this controller. Node 16
+            // has no AbortSignal.timeout, so we drive it with a plain timer.
+            const controller = new AbortController();
+            options.signal = controller.signal;
+
+            let timer: NodeJS.Timeout | undefined;
+            if (timeout > 0) {
+                timer = setTimeout(() => controller.abort(), timeout);
+                // A pending timeout must not keep the process alive.
+                timer.unref();
+            }
+            const clearTimer = () => {
+                if (timer) clearTimeout(timer);
+            };
+
             const request = transport
                 .request(options, (res) => {
                     let body: unknown = '';
@@ -202,12 +241,14 @@ export class Emby {
                         body = `${body}${chunk}`;
                     });
                     res.on('end', () => {
+                        clearTimer();
                         const contentType = res.headers['content-type'];
                         if (contentType?.startsWith('application/json')) {
                             try {
                                 body = JSON.parse(body as string);
                             } catch (e) {
                                 reject(e as Error);
+                                return;
                             }
                         }
 
@@ -224,7 +265,9 @@ export class Emby {
                     });
                 })
                 .on('error', (e) => {
-                    reject(e);
+                    clearTimer();
+                    // The only thing that aborts the controller (so far) is the timeout.
+                    reject(controller.signal.aborted ? new TimeoutError(timeout, method) : e);
                 });
 
             if (sParams.length) {
@@ -846,4 +889,5 @@ export class Emby {
 }
 
 export default Emby;
+export { TimeoutError } from './libs/requestOptions.js';
 export * from './types.js';
