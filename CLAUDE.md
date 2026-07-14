@@ -117,15 +117,18 @@ sdk.api.chatSendMessage({
 });
 ```
 
-`Emby` wires it up in its constructor: `this.api = createOperations(this)`. `this` satisfies the `Transport` interface (just needs a 5-arg `requestApi` method).
+Header params (e.g. `Prefer`) ride a `header:` slot alongside `path`/`query`/`body`.
+
+`Emby` wires it up in its constructor: `this.api = createOperations(this)`. `this` satisfies the `Transport` interface (a 6-arg `requestApi(method, params, type, version, query, headers)`).
 
 **Generator quirks worth knowing:**
 
 - Zod 4's `z.enum` only accepts string literals, so non-string enums (e.g. `[0, 1]`) emit `z.union([z.literal(0), z.literal(1)])`.
-- Zod 4 has no built-in `maxProperties` for records, so OpenAPI `maxProperties: N` becomes `.refine((v) => Object.keys(v).length <= N, ...)`.
+- Zod 4 has no built-in `min`/`maxProperties`, so OpenAPI `minProperties: N` / `maxProperties: N` become `.refine((v) => Object.keys(v).length >= N, ...)` / `<= N`.
 - `oneOf` / `anyOf` → `z.union([...])`. `Avatar` and other discriminated-ish unions ride this path; we don't model strictness, the first matching branch wins.
+- `allOf` → intersection: a single-member `allOf` (the `$ref` + description pattern) collapses to that member; multiple members nest via `z.intersection`.
 - Path-param substitution **does not** call `encodeURIComponent` — `requestApi` runs `encodeURI()` on the full URL, and double-encoding would produce `%252F` instead of `%2F`. This matches the behavior of the hand-written methods.
-- For `PUT`/`POST` operations that also have URL query params, the generator passes the parsed `query` as the 5th arg to `requestApi`.
+- For `PUT`/`POST` operations that also have URL query params, the generator passes the parsed `query` as the 5th arg to `requestApi`; header params (`in: header`) are passed as the 6th arg.
 
 ### `openapi.yml` and the live-test feedback loop
 

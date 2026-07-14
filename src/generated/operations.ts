@@ -13,6 +13,7 @@ export interface Transport {
         type?: HttpMethod,
         version?: string,
         query?: Record<string, unknown>,
+        headers?: Record<string, unknown>,
     ): Promise<T>;
 }
 
@@ -42,6 +43,11 @@ const chatCreateInput = z.object({
             with_participants: z.boolean().optional(),
             result: z.enum(['yes', 'no']).optional(),
             participants: z.enum(['yes', 'no']).optional(),
+        })
+        .optional(),
+    header: z
+        .object({
+            Prefer: z.enum(['return=representation', 'return=minimal']).optional(),
         })
         .optional(),
     body: z.object({
@@ -74,6 +80,11 @@ const chatUpdateInput = z.object({
     query: z
         .object({
             result: z.enum(['yes', 'no']).optional(),
+        })
+        .optional(),
+    header: z
+        .object({
+            Prefer: z.enum(['return=representation', 'return=minimal']).optional(),
         })
         .optional(),
     body: z.object({
@@ -244,6 +255,11 @@ const chatUpdateMessageInput = z.object({
             result: z.enum(['yes', 'no']).optional(),
         })
         .optional(),
+    header: z
+        .object({
+            Prefer: z.enum(['return=representation', 'return=minimal']).optional(),
+        })
+        .optional(),
     body: z.object({
         message: z
             .object({
@@ -305,6 +321,11 @@ const userCreateInput = z.object({
             result: z.enum(['yes', 'no']).optional(),
         })
         .optional(),
+    header: z
+        .object({
+            Prefer: z.enum(['return=representation', 'return=minimal']).optional(),
+        })
+        .optional(),
     body: z.object({
         user: z.object({
             id: z.string().max(255),
@@ -335,6 +356,11 @@ const userUpdateInput = z.object({
     query: z
         .object({
             result: z.enum(['yes', 'no']).optional(),
+        })
+        .optional(),
+    header: z
+        .object({
+            Prefer: z.enum(['return=representation', 'return=minimal']).optional(),
         })
         .optional(),
     body: z.object({
@@ -484,7 +510,8 @@ export function createOperations(transport: Transport) {
             const url = 'chats';
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
             const query = (parsed as { query?: Record<string, unknown> } | undefined)?.query;
-            return transport.requestApi<T>(url, body, 'post', undefined, query);
+            const header = (parsed as { header?: Record<string, unknown> } | undefined)?.header;
+            return transport.requestApi<T>(url, body, 'post', undefined, query, header);
         },
 
         /** Get chat details */
@@ -500,7 +527,8 @@ export function createOperations(transport: Transport) {
             const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}`;
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
             const query = (parsed as { query?: Record<string, unknown> } | undefined)?.query;
-            return transport.requestApi<T>(url, body, 'put', undefined, query);
+            const header = (parsed as { header?: Record<string, unknown> } | undefined)?.header;
+            return transport.requestApi<T>(url, body, 'put', undefined, query, header);
         },
 
         /** Delete chat */
@@ -577,7 +605,8 @@ export function createOperations(transport: Transport) {
             const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}/messages/${String((parsed as { path: Record<string, unknown> }).path['message'])}`;
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
             const query = (parsed as { query?: Record<string, unknown> } | undefined)?.query;
-            return transport.requestApi<T>(url, body, 'put', undefined, query);
+            const header = (parsed as { header?: Record<string, unknown> } | undefined)?.header;
+            return transport.requestApi<T>(url, body, 'put', undefined, query, header);
         },
 
         /** Send typing indicator */
@@ -610,7 +639,8 @@ export function createOperations(transport: Transport) {
             const url = 'users';
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
             const query = (parsed as { query?: Record<string, unknown> } | undefined)?.query;
-            return transport.requestApi<T>(url, body, 'post', undefined, query);
+            const header = (parsed as { header?: Record<string, unknown> } | undefined)?.header;
+            return transport.requestApi<T>(url, body, 'post', undefined, query, header);
         },
 
         /** Get user details */
@@ -626,7 +656,8 @@ export function createOperations(transport: Transport) {
             const url = `users/${String((parsed as { path: Record<string, unknown> }).path['user_id'])}`;
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
             const query = (parsed as { query?: Record<string, unknown> } | undefined)?.query;
-            return transport.requestApi<T>(url, body, 'put', undefined, query);
+            const header = (parsed as { header?: Record<string, unknown> } | undefined)?.header;
+            return transport.requestApi<T>(url, body, 'put', undefined, query, header);
         },
 
         /** Delete user */

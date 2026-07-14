@@ -138,6 +138,7 @@ export class Emby {
         type: HttpMethod = 'get',
         version = 'v1',
         query?: Record<string, unknown>,
+        headers?: Record<string, unknown>,
     ): Promise<T> {
         let sParams = '';
 
@@ -166,6 +167,7 @@ export class Emby {
                 Accept: 'application/json',
                 'Content-Type': 'application/json',
                 Authorization: `Bearer ${this.apiToken}`,
+                ...(headers as Record<string, string> | undefined),
             },
         };
 
@@ -587,8 +589,8 @@ export class Emby {
 
     /**
      * Wire-format aligned with spec: `is_deleted` is a boolean (was `'1'` string).
-     * `returnMessage` maps to the spec `?result=yes` query flag (RFC 7240 `Prefer`
-     * family); the legacy `return_message` body field was removed from the spec.
+     * `returnMessage` maps to the RFC 7240 `Prefer: return=representation` header
+     * (the legacy `return_message` body field and `?result=yes` flag were dropped).
      */
     updateMessage<T = unknown>(
         chatId: string,
@@ -619,7 +621,7 @@ export class Emby {
 
         return this.api.chatUpdateMessage<T>({
             path: { chat_id: chatId, message: messageId },
-            query: returnMessage === true ? { result: 'yes' } : undefined,
+            header: returnMessage === true ? { Prefer: 'return=representation' } : undefined,
             body: {
                 message: messageBody,
                 update_extra_mode: replaceExtra === true ? 'replace' : 'merge',

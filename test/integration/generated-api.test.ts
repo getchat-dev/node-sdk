@@ -234,6 +234,34 @@ describe('generated .api.* (openapi-driven, Zod-validated)', () => {
         });
     });
 
+    describe('header params (Prefer)', () => {
+        test('chatUpdateMessage forwards the Prefer header and returns the represented message', async () => {
+            // The backend decides whether to echo the entity (based on the Prefer header);
+            // the SDK just forwards the header and passes the response body straight back.
+            // This asserts both sides at the mock level — the real "represent only when
+            // asked" contract is a live-test concern.
+            server.respondWith(loadFixture('chats/update-message/success-with-return-message'));
+            const r = await sdk.api.chatUpdateMessage<{ message: { id: string } }>({
+                path: { chat_id: 'c1', message: 'm1' },
+                header: { Prefer: 'return=representation' },
+                body: { message: { text: 'x' } },
+            });
+            assert.equal(server.lastRequest!.headers.prefer, 'return=representation');
+            assert.equal(r.message.id, 'm1');
+        });
+
+        test('Zod rejects an invalid Prefer value', async () => {
+            await assert.rejects(
+                sdk.api.chatUpdateMessage({
+                    path: { chat_id: 'c1', message: 'm1' },
+                    header: { Prefer: 'bogus' as 'return=minimal' },
+                    body: { message: { text: 'x' } },
+                }),
+                (e) => e instanceof ZodError,
+            );
+        });
+    });
+
     describe('surface', () => {
         test('.api exposes all 30 operationIds', () => {
             const names = Object.keys(sdk.api).sort();

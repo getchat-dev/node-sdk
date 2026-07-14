@@ -289,6 +289,7 @@ interface CollectedOp {
     summary?: string;
     pathParams: Parameter[];
     queryParams: Parameter[];
+    headerParams: Parameter[];
     bodySchema: Schema | undefined;
     responseSchema: Schema | undefined;
     requestBodyRequired: boolean;
@@ -312,6 +313,7 @@ function collectOperations(): CollectedOp[] {
             const allParams = [...pathLevelParams, ...(op.parameters ?? []).map(derefParam)];
             const pathParams = allParams.filter((p) => p.in === 'path');
             const queryParams = allParams.filter((p) => p.in === 'query');
+            const headerParams = allParams.filter((p) => p.in === 'header');
             const bodySchema = op.requestBody?.content?.['application/json']?.schema;
             const responseSchema =
                 op.responses['200']?.content?.['application/json']?.schema ??
@@ -326,6 +328,7 @@ function collectOperations(): CollectedOp[] {
                 summary: op.summary,
                 pathParams,
                 queryParams,
+                headerParams,
                 bodySchema,
                 responseSchema,
                 requestBodyRequired: op.requestBody?.required === true,
@@ -357,6 +360,7 @@ function emitOperationsFile(operations: CollectedOp[]): string {
     parts.push('        type?: HttpMethod,');
     parts.push('        version?: string,');
     parts.push('        query?: Record<string, unknown>,');
+    parts.push('        headers?: Record<string, unknown>,');
     parts.push('    ): Promise<T>;');
     parts.push('}');
     parts.push('');
@@ -380,6 +384,16 @@ function emitOperationsFile(operations: CollectedOp[]): string {
                 })
                 .join(',\n');
             partsInput.push(`    query: z.object({\n${props}\n    }).optional()`);
+        }
+        if (op.headerParams.length > 0) {
+            const props = op.headerParams
+                .map((p) => {
+                    let e = emitZod(p.schema, 2);
+                    if (!p.required) e += '.optional()';
+                    return `        ${JSON.stringify(p.name)}: ${e}`;
+                })
+                .join(',\n');
+            partsInput.push(`    header: z.object({\n${props}\n    }).optional()`);
         }
         if (op.bodySchema) {
             const bodyZod = emitZod(op.bodySchema, 1);
@@ -431,30 +445,38 @@ function emitOperationsFile(operations: CollectedOp[]): string {
         }
         parts.push(`            const url = ${urlExpr};`);
 
-        // Determine params argument for requestApi. parsed may be `undefined` when input is optional,
-        // so guard with `?? undefined` shape-cast before field access.
+        // Assemble the requestApi call. parsed may be `undefined` when the whole input is
+        // optional, so each slot is read behind a `{ slot?: ... } | undefined` shape-cast.
+        // Arg order: (url, params, method, version, query, headers). For GET/DELETE the
+        // query rides `params` (serialized into the URL); for POST/PUT `params` is the JSON
+        // body and query/headers ride the trailing slots. Trailing `undefined`s are trimmed.
         const isBodyMethod = op.method === 'post' || op.method === 'put';
         const hasBody = isBodyMethod && op.bodySchema;
         const hasQuery = op.queryParams.length > 0;
+        const hasHeader = op.headerParams.length > 0;
 
-        if (hasBody && hasQuery) {
+        let paramsArg = 'undefined';
+        if (hasBody) {
             parts.push(`            const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;`);
-            parts.push(`            const query = (parsed as { query?: Record<string, unknown> } | undefined)?.query;`);
-            parts.push(`            return transport.requestApi<T>(url, body, '${op.method}', undefined, query);`);
-        } else if (hasBody) {
-            parts.push(`            const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;`);
-            parts.push(`            return transport.requestApi<T>(url, body, '${op.method}');`);
-        } else if (isBodyMethod && hasQuery) {
-            parts.push(`            const query = (parsed as { query?: Record<string, unknown> } | undefined)?.query;`);
-            parts.push(`            return transport.requestApi<T>(url, undefined, '${op.method}', undefined, query);`);
-        } else if (isBodyMethod) {
-            parts.push(`            return transport.requestApi<T>(url, undefined, '${op.method}');`);
-        } else if (hasQuery) {
-            parts.push(`            const query = (parsed as { query?: Record<string, unknown> } | undefined)?.query;`);
-            parts.push(`            return transport.requestApi<T>(url, query, '${op.method}');`);
-        } else {
-            parts.push(`            return transport.requestApi<T>(url, undefined, '${op.method}');`);
+            paramsArg = 'body';
         }
+        let queryArg = 'undefined';
+        if (hasQuery) {
+            parts.push(`            const query = (parsed as { query?: Record<string, unknown> } | undefined)?.query;`);
+            if (isBodyMethod) queryArg = 'query';
+            else paramsArg = 'query';
+        }
+        let headerArg = 'undefined';
+        if (hasHeader) {
+            parts.push(
+                `            const header = (parsed as { header?: Record<string, unknown> } | undefined)?.header;`,
+            );
+            headerArg = 'header';
+        }
+
+        const callArgs = ['url', paramsArg, `'${op.method}'`, 'undefined', queryArg, headerArg];
+        while (callArgs.length > 3 && callArgs[callArgs.length - 1] === 'undefined') callArgs.pop();
+        parts.push(`            return transport.requestApi<T>(${callArgs.join(', ')});`);
 
         parts.push('        },');
     }

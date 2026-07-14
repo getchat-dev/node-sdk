@@ -68,7 +68,7 @@ describe('Emby.updateMessage()', () => {
         assert.equal((server.lastRequest!.body as JsonBody).update_extra_mode, 'replace');
     });
 
-    test('returnMessage=true sends ?result=yes query (not a body field)', async () => {
+    test('returnMessage=true sends Prefer: return=representation header', async () => {
         server.respondWith(loadFixture('chats/update-message/success-with-return-message'));
 
         const r = await sdk.updateMessage<{ message: { id: string } }>(
@@ -78,19 +78,20 @@ describe('Emby.updateMessage()', () => {
             { returnMessage: true },
         );
 
-        // returnMessage now maps to the spec `?result=yes` query flag (RFC 7240 Prefer
-        // family); the legacy `return_message` body field was removed from the spec.
-        assert.match(server.lastRequest!.path!, /result=yes/);
+        // returnMessage maps to the RFC 7240 Prefer header — not a query flag or a body
+        // field. (Node lowercases incoming header names, hence `headers.prefer`.)
+        assert.equal(server.lastRequest!.headers.prefer, 'return=representation');
+        assert.doesNotMatch(server.lastRequest!.path!, /result=/);
         assert.equal((server.lastRequest!.body as JsonBody).return_message, undefined);
         assert.equal(r.message.id, 'm1');
     });
 
-    test('returnMessage=false (default) sends no result query', async () => {
+    test('returnMessage=false (default) sends no Prefer header', async () => {
         server.respondWith(loadFixture('chats/update-message/success'));
 
         await sdk.updateMessage('c1', 'm1', { text: 'x' });
 
-        assert.doesNotMatch(server.lastRequest!.path!, /result=/);
+        assert.equal(server.lastRequest!.headers.prefer, undefined);
     });
 
     test('buttons array propagates into message', async () => {
