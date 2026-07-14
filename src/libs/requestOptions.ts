@@ -4,15 +4,22 @@ import { z } from 'zod';
 // public type lives on `EmbyRequestOptions` in index.ts; this schema enforces
 // sane values at construction so a bad `timeout` fails fast (a clear ZodError)
 // instead of silently misbehaving. Kept in sync with `EmbyRequestOptions`.
+// Shared numeric bounds, reused by the constructor `options` and the per-call
+// overrides so a value like `retries: 15` is rejected the same way wherever it is
+// set. `timeout`/`retryDelay`: `.int().nonnegative()` rejects negatives, fractions,
+// NaN and non-numbers. `retries` is capped so a typo like `retries: 10000` fails
+// validation instead of hammering the backend.
+const timeoutSchema = z.number().int().nonnegative();
+const retriesSchema = z.number().int().min(0).max(10);
+const retryDelaySchema = z.number().int().nonnegative();
+
 export const requestOptionsSchema = z.strictObject({
-    // Per-attempt timeout in ms. 0 disables it. `.int().nonnegative()` rejects
-    // negatives, fractions, NaN and non-numbers.
-    timeout: z.number().int().nonnegative().default(30_000),
-    // Retry attempts after the first failure (0 disables). Capped so a typo like
-    // `retries: 10000` fails validation instead of hammering the backend.
-    retries: z.number().int().min(0).max(10).default(2),
+    // Per-attempt timeout in ms. 0 disables it.
+    timeout: timeoutSchema.default(30_000),
+    // Retry attempts after the first failure (0 disables).
+    retries: retriesSchema.default(2),
     // Base backoff delay in ms (exponential with jitter between attempts).
-    retryDelay: z.number().int().nonnegative().default(200),
+    retryDelay: retryDelaySchema.default(200),
 });
 
 export type ResolvedRequestOptions = z.infer<typeof requestOptionsSchema>;
@@ -61,4 +68,31 @@ export function pickRequestControl(input: unknown): RequestControlOptions {
         if (src[key] !== undefined) out[key] = src[key];
     }
     return out as RequestControlOptions;
+}
+
+// Per-call numeric overrides share the instance bounds; all optional (undefined =
+// fall back to the instance default). `signal` is not a number and is handled
+// separately, so it is validated/passed through outside this schema.
+export const controlOverridesSchema = z.strictObject({
+    timeout: timeoutSchema.optional(),
+    retries: retriesSchema.optional(),
+    retryDelay: retryDelaySchema.optional(),
+});
+
+export type ControlOverrides = z.infer<typeof controlOverridesSchema>;
+
+/**
+ * Validate the per-call `timeout`/`retries`/`retryDelay` overrides against the same
+ * bounds as the constructor options. Throws a ZodError on a bad value so a per-call
+ * typo fails as loudly as an instance one (they used to slip through unchecked).
+ */
+export function resolveControlOverrides(control: RequestControlOptions | undefined): ControlOverrides {
+    if (!control) return {};
+    // Only forward keys that were actually set, so the result is a clean {} when
+    // nothing is overridden (an absent key means "use the instance default").
+    const input: Record<string, unknown> = {};
+    if (control.timeout !== undefined) input.timeout = control.timeout;
+    if (control.retries !== undefined) input.retries = control.retries;
+    if (control.retryDelay !== undefined) input.retryDelay = control.retryDelay;
+    return controlOverridesSchema.parse(input);
 }

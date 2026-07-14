@@ -68,6 +68,14 @@ describe('per-call cancellation & overrides', () => {
         assert.equal(server.requests.length, 2);
     });
 
+    test('an out-of-range per-call option rejects before sending', async () => {
+        server.respondWith({ status: 200, body: { ok: true } });
+        // 15 is above the cap of 10 the instance schema enforces; the per-call path
+        // now gets the same validation instead of silently honoring it.
+        await assert.rejects(sdk().api.chatShow({ path: { chat_id: 'c1' }, retries: 15 }));
+        assert.equal(server.requests.length, 0);
+    });
+
     test('per-call options do not leak into the request wire payload', async () => {
         server.respondWith({ status: 201, body: { status: true } });
         const ac = new AbortController();

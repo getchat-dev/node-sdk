@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { pickRequestControl, resolveRequestOptions, TimeoutError } from '../../src/libs/requestOptions';
+import {
+    pickRequestControl,
+    resolveControlOverrides,
+    resolveRequestOptions,
+    TimeoutError,
+} from '../../src/libs/requestOptions';
 
 describe('resolveRequestOptions', () => {
     test('fills defaults when unset', () => {
@@ -64,5 +69,34 @@ describe('pickRequestControl', () => {
         });
         assert.deepEqual(pickRequestControl({ path: { chat_id: 'c1' } }), {}); // no control keys
         assert.deepEqual(pickRequestControl({ timeout: undefined }), {}); // undefined ignored
+    });
+});
+
+describe('resolveControlOverrides', () => {
+    test('empty for no control / no numeric overrides', () => {
+        assert.deepEqual(resolveControlOverrides(undefined), {});
+        assert.deepEqual(resolveControlOverrides({}), {});
+        // signal-only control carries no numeric overrides
+        assert.deepEqual(resolveControlOverrides({ signal: new AbortController().signal }), {});
+    });
+
+    test('passes valid overrides through (0 kept)', () => {
+        assert.deepEqual(resolveControlOverrides({ timeout: 5000, retries: 3, retryDelay: 50 }), {
+            timeout: 5000,
+            retries: 3,
+            retryDelay: 50,
+        });
+        assert.equal(resolveControlOverrides({ timeout: 0 }).timeout, 0);
+        assert.equal(resolveControlOverrides({ retries: 0 }).retries, 0);
+    });
+
+    test('per-call overrides get the SAME bounds as the instance options', () => {
+        assert.throws(() => resolveControlOverrides({ retries: 15 })); // above the cap of 10
+        assert.throws(() => resolveControlOverrides({ retries: -1 }));
+        assert.throws(() => resolveControlOverrides({ timeout: -1 }));
+        assert.throws(() => resolveControlOverrides({ timeout: 1.5 }));
+        assert.throws(() => resolveControlOverrides({ retryDelay: -5 }));
+        // biome-ignore lint/suspicious/noExplicitAny: feeding a wrong type on purpose
+        assert.throws(() => resolveControlOverrides({ timeout: 'soon' as any }));
     });
 });

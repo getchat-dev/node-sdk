@@ -47,6 +47,7 @@ import * as _ from './libs/helpers.js';
 import processUserRights from './libs/processUserRights.js';
 import {
     type RequestControlOptions,
+    resolveControlOverrides,
     type ResolvedRequestOptions,
     resolveRequestOptions,
     TimeoutError,
@@ -228,11 +229,14 @@ export class Emby {
             sParams = JSON.stringify(params);
         }
 
-        // Per-call options override the instance defaults for this request.
+        // Per-call options override the instance defaults for this request. The
+        // numeric overrides run through the same bounds as the instance options, so a
+        // bad `retries`/`timeout`/`retryDelay` throws instead of slipping through.
         const signal = control?.signal;
-        const timeout = control?.timeout ?? this.requestOptions.timeout;
-        const retries = control?.retries ?? this.requestOptions.retries;
-        const retryDelay = control?.retryDelay ?? this.requestOptions.retryDelay;
+        const overrides = resolveControlOverrides(control);
+        const timeout = overrides.timeout ?? this.requestOptions.timeout;
+        const retries = overrides.retries ?? this.requestOptions.retries;
+        const retryDelay = overrides.retryDelay ?? this.requestOptions.retryDelay;
 
         const attempt = () =>
             new Promise<T>((resolve, reject) => {
