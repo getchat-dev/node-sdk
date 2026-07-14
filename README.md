@@ -352,6 +352,12 @@ await emby.removeParticipantFromChat('chat_id', 'user_id');
 ```
 Removes a single participant. To remove many, loop on the caller side.
 
+#### `getParticipantRights(chatId, userId)`
+```ts
+const r = await emby.getParticipantRights('chat_id', 'user_id');
+console.log(r.rights); // per-chat overrides; rights not listed fall back to the signed-link values
+```
+
 #### `updateParticipantRights(chatId, userId, rights)`
 ```ts
 await emby.updateParticipantRights('chat_id', 'user_id', {

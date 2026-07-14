@@ -8,6 +8,7 @@ import {
     type ChatCreateResponse,
     type ChatDeleteParticipantsResponse,
     type ChatDeleteResponse,
+    type ChatGetParticipantRightsResponse,
     type ChatListInput,
     type ChatListResponse,
     type ChatMessagesInput,
@@ -877,6 +878,27 @@ export class Emby {
             throw new Error("user id isn't passed");
         }
         return this.api.chatDeleteParticipants<T>({
+            path: { chat_id: chatId, user_id: userId },
+        });
+    }
+
+    /**
+     * Read a participant's per-chat right overrides (`GET
+     * chats/{chatId}/participants/{userId}/rights`) — the values set via
+     * {@link updateParticipantRights}. Rights not overridden here fall back to the
+     * participant's signed-link values.
+     *
+     * @param chatId  Chat id.
+     * @param userId  Participant's user id.
+     */
+    getParticipantRights<T = ChatGetParticipantRightsResponse>(chatId: string, userId: string): Promise<T> {
+        if (!_.isString(chatId)) {
+            throw new Error("chat id isn't passed");
+        }
+        if (!_.isString(userId)) {
+            throw new Error("user id isn't passed");
+        }
+        return this.api.chatGetParticipantRights<T>({
             path: { chat_id: chatId, user_id: userId },
         });
     }
