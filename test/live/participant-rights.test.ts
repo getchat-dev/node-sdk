@@ -15,7 +15,7 @@
 
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { makeLiveSdk, setupSuite, SKIP_REASON, uid } from './_helpers.js';
+import { describeError, makeLiveSdk, SKIP_REASON, setupSuite, uid } from './_helpers.js';
 
 type AnyResp = Record<string, unknown>;
 
@@ -58,6 +58,14 @@ describe('live: participant rights (get/update round-trip)', { skip: SKIP_REASON
         assert.equal(typeof got.rights, 'object', 'expected a rights object (possibly empty)');
     });
 
+    test('control: the member can send before being muted', async () => {
+        const r = await sdk.api.chatSendMessage<{ message_ids?: string[] }>({
+            path: { chat_id: chatId },
+            body: { user: { id: memberId, name: 'Member' }, messages: [{ text: 'before mute' }] },
+        });
+        assert.ok(Array.isArray(r.message_ids) && r.message_ids.length === 1, 'baseline send did not create a message');
+    });
+
     test('update sets overrides; get reflects them', async (t) => {
         const upd = await sdk.updateParticipantRights(chatId, memberId, {
             send_messages: false, // mute in this chat
@@ -71,6 +79,27 @@ describe('live: participant rights (get/update round-trip)', { skip: SKIP_REASON
         assert.ok('send_messages' in rights, 'send_messages override did not round-trip');
         assert.ok('pin_messages' in rights, 'pin_messages override did not round-trip');
         mutedValue = rights.send_messages;
+    });
+
+    test('send_messages: false blocks the member from sending via the API', async (t) => {
+        // The member was just muted (send_messages: false) in the step above. Per the
+        // spec, the API must reject the send — a muted participant must not post a
+        // message. Robust to both enforcement styles: a hard error OR a response with
+        // no message id both count as "did not pass"; a created message id fails.
+        let created: string | undefined;
+        let rejected = false;
+        try {
+            const r = await sdk.api.chatSendMessage<{ message_ids?: string[] }>({
+                path: { chat_id: chatId },
+                body: { user: { id: memberId, name: 'Member' }, messages: [{ text: 'should be blocked' }] },
+            });
+            created = r.message_ids?.[0];
+            t.diagnostic(`send returned without error; message_ids=${JSON.stringify(r.message_ids)}`);
+        } catch (e) {
+            rejected = true;
+            t.diagnostic(`send rejected: ${describeError(e)}`);
+        }
+        assert.ok(rejected || !created, 'a muted participant (send_messages: false) still managed to post a message');
     });
 
     test('flipping a right changes the read-back value', async (t) => {
@@ -92,6 +121,17 @@ describe('live: participant rights (get/update round-trip)', { skip: SKIP_REASON
             'pin_messages' in rights
                 ? `pin_messages persisted (${JSON.stringify(rights.pin_messages)}) → merge semantics`
                 : 'pin_messages absent → replace semantics',
+        );
+    });
+
+    test('unmuting (send_messages: true) lets the member send again', async () => {
+        const r = await sdk.api.chatSendMessage<{ message_ids?: string[] }>({
+            path: { chat_id: chatId },
+            body: { user: { id: memberId, name: 'Member' }, messages: [{ text: 'after unmute' }] },
+        });
+        assert.ok(
+            Array.isArray(r.message_ids) && r.message_ids.length === 1,
+            'send after unmute did not create a message',
         );
     });
 
