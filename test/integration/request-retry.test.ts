@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, describe, test } from 'node:test';
 import { Emby, type EmbyRequestOptions } from '../../src/index';
+import { TimeoutError } from '../../src/libs/requestOptions';
 import { type MockServer, startMockServer } from '../helpers/mockServer';
 import { DEFAULTS } from '../helpers/sdkFactory';
 
@@ -75,5 +76,25 @@ describe('request retry', () => {
         server.respondWith({ status: 503, body: {} });
         await assert.rejects(sdk({ retries: 0 }).getChatInfo('c1'), (e) => (e as HttpErr).status === 503);
         assert.equal(server.requests.length, 1);
+    });
+
+    test('GET retries a timeout — each attempt gets a fresh timeout', async () => {
+        server.respondWith({ status: 200, body: { ok: true }, delayMs: 120 }); // too slow → times out
+        server.respondWith({ status: 200, body: { ok: true }, delayMs: 120 }); // too slow → times out
+        server.respondWith({ status: 200, body: { ok: 'fast' } }); // answers in time → succeeds
+        const res = await sdk({ timeout: 40, retries: 2 }).getChatInfo<{ ok: string }>('c1');
+        assert.deepEqual(res, { ok: 'fast' });
+        assert.equal(server.requests.length, 3); // two timed-out attempts + the fast one
+    });
+
+    test('POST does NOT retry a timeout (the write may have landed)', async () => {
+        server.respondWith({ status: 201, body: { ok: true }, delayMs: 120 });
+        server.respondWith({ status: 201, body: { ok: true }, delayMs: 120 }); // must never be consumed
+        await assert.rejects(
+            sdk({ timeout: 40, retries: 2 }).createChat({ id: 'c1', title: 'T', type: 'group' }),
+            (e) => e instanceof TimeoutError,
+        );
+        await new Promise((r) => setTimeout(r, 60)); // catch a stray duplicate write, if any
+        assert.equal(server.requests.length, 1); // exactly one write, never replayed
     });
 });
