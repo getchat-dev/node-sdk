@@ -114,6 +114,16 @@ function emitZod(schema: Schema, depth = 0): string {
         return `z.union([${schema.anyOf.map((s: Schema) => emitZod(s, depth)).join(', ')}])`;
     }
 
+    // allOf — intersection. A single-member allOf (the common "$ref + description"
+    // pattern used to attach docs to a reference) collapses to that member; multiple
+    // members nest via z.intersection.
+    if (Array.isArray(schema.allOf) && schema.allOf.length > 0) {
+        const members = schema.allOf.map((s: Schema) => emitZod(s, depth));
+        return members.length === 1
+            ? members[0]
+            : members.reduce((a: string, b: string) => `z.intersection(${a}, ${b})`);
+    }
+
     if (Array.isArray(schema.enum)) {
         // z.enum() requires string literals; non-string enums become a literal union.
         const allStrings = schema.enum.every((e: unknown) => typeof e === 'string');
@@ -159,20 +169,26 @@ function emitZod(schema: Schema, depth = 0): string {
 
     const hasProps = schema.properties && Object.keys(schema.properties).length > 0;
 
-    // OpenAPI maxProperties → Zod refinement (Zod 4 has no built-in for this)
-    const withMaxProps = (expr: string): string => {
+    // OpenAPI min/maxProperties → Zod refinements (Zod 4 has no built-in for these)
+    const withPropCount = (expr: string): string => {
+        let out = expr;
+        if (typeof schema.minProperties === 'number') {
+            const min = schema.minProperties;
+            const noun = min === 1 ? 'property' : 'properties';
+            out += `.refine((v) => Object.keys(v as object).length >= ${min}, { message: 'at least ${min} ${noun} required' })`;
+        }
         if (typeof schema.maxProperties === 'number') {
             const max = schema.maxProperties;
-            return `${expr}.refine((v) => Object.keys(v as object).length <= ${max}, { message: 'maximum ${max} properties allowed' })`;
+            out += `.refine((v) => Object.keys(v as object).length <= ${max}, { message: 'maximum ${max} properties allowed' })`;
         }
-        return expr;
+        return out;
     };
 
     // Pure record (no defined properties, only additionalProperties)
     if (!hasProps && schema.additionalProperties) {
         const valueSchema =
             schema.additionalProperties === true ? 'z.unknown()' : emitZod(schema.additionalProperties, depth);
-        return withMaxProps(`z.record(z.string(), ${valueSchema})`);
+        return withPropCount(`z.record(z.string(), ${valueSchema})`);
     }
 
     if (schema.type === 'object' || hasProps) {
@@ -191,7 +207,7 @@ function emitZod(schema: Schema, depth = 0): string {
                 schema.additionalProperties === true ? 'z.unknown()' : emitZod(schema.additionalProperties, depth);
             obj += `.catchall(${valueSchema})`;
         }
-        return withMaxProps(obj);
+        return withPropCount(obj);
     }
 
     return 'z.unknown()';

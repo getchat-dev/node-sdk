@@ -7,7 +7,6 @@ import { type MockServer, startMockServer } from '../helpers/mockServer';
 import { makeSdk } from '../helpers/sdkFactory';
 
 type JsonBody = Record<string, unknown>;
-type HttpErr = Error & { status?: number };
 
 describe('generated .api.* (openapi-driven, Zod-validated)', () => {
     let server: MockServer;
@@ -218,11 +217,12 @@ describe('generated .api.* (openapi-driven, Zod-validated)', () => {
             );
         });
 
-        test('chatUpdateParticipantRights: backend 422 (no rights provided) rejects', async () => {
-            server.respondWith({ status: 422, body: { status: false, message: 'no rights' } });
+        test('chatUpdateParticipantRights: Zod rejects an empty body (minProperties: 1)', async () => {
+            // The spec sets minProperties: 1; the generator enforces it, so an empty
+            // rights object is rejected client-side before any request is made.
             await assert.rejects(
                 sdk.api.chatUpdateParticipantRights({ path: { chat_id: 'c1', user_id: 'u1' }, body: {} }),
-                (e) => (e as HttpErr).status === 422,
+                (e) => e instanceof ZodError,
             );
         });
 

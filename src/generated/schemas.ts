@@ -101,7 +101,7 @@ export const ChatResourceSchema = z.object({
     created_at: z.iso.datetime({ offset: true }),
     updated_at: z.iso.datetime({ offset: true }),
     last_message_at: z.iso.datetime({ offset: true }).optional(),
-    last_message: z.unknown().optional(),
+    last_message: MessageResourceSchema.optional(),
     owner_id: z.string().optional(),
     owner: UserResourceSchema.optional(),
     metadata: z.record(z.string(), z.string()).optional(),
