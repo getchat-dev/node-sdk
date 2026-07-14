@@ -262,6 +262,19 @@ describe('generated .api.* (openapi-driven, Zod-validated)', () => {
         });
     });
 
+    describe('typed responses', () => {
+        test('chatList returns ChatListResponse by default (no explicit generic)', async () => {
+            server.respondWith(loadFixture('chats/list/success'));
+            // No <T> passed: the return type defaults to the generated ChatListResponse.
+            // `res.status` / `res.pagination` are statically known — if the default were
+            // still `unknown`, accessing these would be a compile error, so this test
+            // doubles as a type-level guard for the response wiring.
+            const res = await sdk.api.chatList({ query: { limit: 10 } });
+            assert.equal(typeof res.status, 'boolean');
+            assert.ok(res.pagination);
+        });
+    });
+
     describe('surface', () => {
         test('.api exposes all 30 operationIds', () => {
             const names = Object.keys(sdk.api).sort();

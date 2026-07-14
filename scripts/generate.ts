@@ -214,6 +214,59 @@ function emitZod(schema: Schema, depth = 0): string {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+// TS type emitter — for response shapes. Responses are pass-through (never
+// Zod-parsed at runtime), so we emit plain TS types, not schemas. Component
+// `$ref`s resolve to `S.<Name>` (operations.ts imports schemas.ts as `S`).
+// ────────────────────────────────────────────────────────────────────────────
+function emitType(schema: Schema): string {
+    const ref = schemaRefName(schema);
+    if (ref) return `S.${ref}`;
+
+    if (!schema || typeof schema !== 'object') return 'unknown';
+
+    if (Array.isArray(schema.oneOf) && schema.oneOf.length > 0) {
+        return schema.oneOf.map((s: Schema) => emitType(s)).join(' | ');
+    }
+    if (Array.isArray(schema.anyOf) && schema.anyOf.length > 0) {
+        return schema.anyOf.map((s: Schema) => emitType(s)).join(' | ');
+    }
+    if (Array.isArray(schema.allOf) && schema.allOf.length > 0) {
+        return schema.allOf.map((s: Schema) => emitType(s)).join(' & ');
+    }
+    if (Array.isArray(schema.enum)) {
+        return schema.enum.map((e: unknown) => JSON.stringify(e)).join(' | ');
+    }
+    if (schema.type === 'string') return 'string';
+    if (schema.type === 'integer' || schema.type === 'number') return 'number';
+    if (schema.type === 'boolean') return 'boolean';
+    if (schema.type === 'array') return `Array<${emitType(schema.items)}>`;
+
+    const hasProps = schema.properties && Object.keys(schema.properties).length > 0;
+
+    if (!hasProps && schema.additionalProperties) {
+        const value = schema.additionalProperties === true ? 'unknown' : emitType(schema.additionalProperties);
+        return `Record<string, ${value}>`;
+    }
+
+    if (schema.type === 'object' || hasProps) {
+        const required = new Set<string>(schema.required ?? []);
+        const props = Object.entries(schema.properties ?? {}).map(([name, sub]) => {
+            let t = emitType(sub as Schema);
+            if ((sub as Schema).nullable) t += ' | null';
+            return `${JSON.stringify(name)}${required.has(name) ? '' : '?'}: ${t}`;
+        });
+        let out = `{ ${props.join('; ')} }`;
+        if (schema.additionalProperties) {
+            const value = schema.additionalProperties === true ? 'unknown' : emitType(schema.additionalProperties);
+            out += ` & Record<string, ${value}>`;
+        }
+        return out;
+    }
+
+    return 'unknown';
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 // Topological sort of component schemas (schemas reference each other by name)
 // ────────────────────────────────────────────────────────────────────────────
 function collectSchemaRefs(schema: Schema): Set<string> {
@@ -416,6 +469,9 @@ function emitOperationsFile(operations: CollectedOp[]): string {
 
         parts.push(`const ${op.name}Input = ${schemaExpr};`);
         parts.push(`export type ${op.typeName}Input = z.infer<typeof ${op.name}Input>;`);
+        // Response type from the 200/201 JSON schema (pass-through, not validated).
+        const responseType = op.responseSchema ? emitType(op.responseSchema) : 'unknown';
+        parts.push(`export type ${op.typeName}Response = ${responseType};`);
         parts.push('');
     }
 
@@ -428,7 +484,7 @@ function emitOperationsFile(operations: CollectedOp[]): string {
 
         parts.push('');
         if (op.summary) parts.push(`        /** ${op.summary} */`);
-        parts.push(`        ${op.name}: async <T = unknown>(${inputParam}): Promise<T> => {`);
+        parts.push(`        ${op.name}: async <T = ${op.typeName}Response>(${inputParam}): Promise<T> => {`);
         parts.push(`            const parsed = ${op.name}Input.parse(input);`);
 
         // Build URL. NOTE: we intentionally do NOT encodeURIComponent here — requestApi does

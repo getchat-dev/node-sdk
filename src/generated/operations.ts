@@ -36,6 +36,20 @@ const chatListInput = z
     })
     .optional();
 export type ChatListInput = z.infer<typeof chatListInput>;
+export type ChatListResponse = {
+    status: boolean;
+    chats: Record<string, S.ChatResource>;
+    chats_sort?: Array<string>;
+    users?: Record<string, S.UserResource>;
+    meta: { total: number; output: number };
+    pagination: {
+        items_per_page: number;
+        current: number;
+        total: number;
+        next_page_url?: string | null;
+        prev_page_url?: string | null;
+    };
+};
 
 const chatCreateInput = z.object({
     query: z
@@ -65,6 +79,10 @@ const chatCreateInput = z.object({
     }),
 });
 export type ChatCreateInput = z.infer<typeof chatCreateInput>;
+export type ChatCreateResponse = {
+    status?: boolean;
+    data?: { chat?: S.ChatResource; participants?: Array<S.ParticipantResource> };
+};
 
 const chatShowInput = z.object({
     path: z.object({
@@ -72,6 +90,7 @@ const chatShowInput = z.object({
     }),
 });
 export type ChatShowInput = z.infer<typeof chatShowInput>;
+export type ChatShowResponse = { status?: boolean; data?: { chat?: S.ChatResource } };
 
 const chatUpdateInput = z.object({
     path: z.object({
@@ -98,6 +117,7 @@ const chatUpdateInput = z.object({
     }),
 });
 export type ChatUpdateInput = z.infer<typeof chatUpdateInput>;
+export type ChatUpdateResponse = { status?: boolean; data?: { chat?: S.ChatResource } };
 
 const chatDeleteInput = z.object({
     path: z.object({
@@ -105,6 +125,7 @@ const chatDeleteInput = z.object({
     }),
 });
 export type ChatDeleteInput = z.infer<typeof chatDeleteInput>;
+export type ChatDeleteResponse = { status?: boolean };
 
 const chatParticipantsInput = z.object({
     path: z.object({
@@ -118,6 +139,11 @@ const chatParticipantsInput = z.object({
         .optional(),
 });
 export type ChatParticipantsInput = z.infer<typeof chatParticipantsInput>;
+export type ChatParticipantsResponse = {
+    participants: Array<S.ParticipantResource>;
+    meta: { total?: number; output?: number };
+    pagination: { items_per_page?: number; current?: number; total?: number };
+};
 
 const chatAddParticipantsInput = z.object({
     path: z.object({
@@ -140,6 +166,7 @@ const chatAddParticipantsInput = z.object({
     }),
 });
 export type ChatAddParticipantsInput = z.infer<typeof chatAddParticipantsInput>;
+export type ChatAddParticipantsResponse = unknown;
 
 const chatGetParticipantRightsInput = z.object({
     path: z.object({
@@ -148,6 +175,7 @@ const chatGetParticipantRightsInput = z.object({
     }),
 });
 export type ChatGetParticipantRightsInput = z.infer<typeof chatGetParticipantRightsInput>;
+export type ChatGetParticipantRightsResponse = { status?: boolean; rights?: Record<string, unknown> };
 
 const chatUpdateParticipantRightsInput = z.object({
     path: z.object({
@@ -179,6 +207,7 @@ const chatUpdateParticipantRightsInput = z.object({
         .refine((v) => Object.keys(v as object).length >= 1, { message: 'at least 1 property required' }),
 });
 export type ChatUpdateParticipantRightsInput = z.infer<typeof chatUpdateParticipantRightsInput>;
+export type ChatUpdateParticipantRightsResponse = { status?: boolean };
 
 const chatDeleteParticipantRightsInput = z.object({
     path: z.object({
@@ -187,6 +216,7 @@ const chatDeleteParticipantRightsInput = z.object({
     }),
 });
 export type ChatDeleteParticipantRightsInput = z.infer<typeof chatDeleteParticipantRightsInput>;
+export type ChatDeleteParticipantRightsResponse = { status?: boolean };
 
 const chatDeleteParticipantsInput = z.object({
     path: z.object({
@@ -195,6 +225,7 @@ const chatDeleteParticipantsInput = z.object({
     }),
 });
 export type ChatDeleteParticipantsInput = z.infer<typeof chatDeleteParticipantsInput>;
+export type ChatDeleteParticipantsResponse = unknown;
 
 const chatMessagesInput = z.object({
     path: z.object({
@@ -212,6 +243,19 @@ const chatMessagesInput = z.object({
         .optional(),
 });
 export type ChatMessagesInput = z.infer<typeof chatMessagesInput>;
+export type ChatMessagesResponse = {
+    messages: Record<string, S.MessageResource>;
+    messages_sort?: Array<string>;
+    users?: Record<string, S.ParticipantResource>;
+    meta: { total?: number; output?: number };
+    pagination: {
+        items_per_page?: number;
+        current?: number;
+        total?: number;
+        next_page_url?: string | null;
+        prev_page_url?: string | null;
+    };
+};
 
 const chatSendMessageInput = z.object({
     path: z.object({
@@ -244,6 +288,7 @@ const chatSendMessageInput = z.object({
     }),
 });
 export type ChatSendMessageInput = z.infer<typeof chatSendMessageInput>;
+export type ChatSendMessageResponse = { status?: boolean; message_ids?: Array<string> };
 
 const chatUpdateMessageInput = z.object({
     path: z.object({
@@ -273,6 +318,7 @@ const chatUpdateMessageInput = z.object({
     }),
 });
 export type ChatUpdateMessageInput = z.infer<typeof chatUpdateMessageInput>;
+export type ChatUpdateMessageResponse = { status?: boolean; is_updated?: boolean; message?: S.MessageResource };
 
 const chatSendTypingInput = z.object({
     path: z.object({
@@ -286,6 +332,7 @@ const chatSendTypingInput = z.object({
         .optional(),
 });
 export type ChatSendTypingInput = z.infer<typeof chatSendTypingInput>;
+export type ChatSendTypingResponse = unknown;
 
 const chatSetWebhookInput = z.object({
     path: z.object({
@@ -297,6 +344,7 @@ const chatSetWebhookInput = z.object({
     }),
 });
 export type ChatSetWebhookInput = z.infer<typeof chatSetWebhookInput>;
+export type ChatSetWebhookResponse = unknown;
 
 const chatSetS3CredentialsInput = z.object({
     path: z.object({
@@ -314,6 +362,7 @@ const chatSetS3CredentialsInput = z.object({
     }),
 });
 export type ChatSetS3CredentialsInput = z.infer<typeof chatSetS3CredentialsInput>;
+export type ChatSetS3CredentialsResponse = { status?: boolean; modified?: boolean };
 
 const userCreateInput = z.object({
     query: z
@@ -341,6 +390,7 @@ const userCreateInput = z.object({
     }),
 });
 export type UserCreateInput = z.infer<typeof userCreateInput>;
+export type UserCreateResponse = { status?: boolean; data?: { user?: S.UserResource } };
 
 const userShowInput = z.object({
     path: z.object({
@@ -348,6 +398,7 @@ const userShowInput = z.object({
     }),
 });
 export type UserShowInput = z.infer<typeof userShowInput>;
+export type UserShowResponse = { status?: boolean; data?: { user?: S.UserResource } };
 
 const userUpdateInput = z.object({
     path: z.object({
@@ -377,6 +428,7 @@ const userUpdateInput = z.object({
     }),
 });
 export type UserUpdateInput = z.infer<typeof userUpdateInput>;
+export type UserUpdateResponse = { status?: boolean; data?: { user?: S.UserResource } };
 
 const userDeleteInput = z.object({
     path: z.object({
@@ -384,6 +436,7 @@ const userDeleteInput = z.object({
     }),
 });
 export type UserDeleteInput = z.infer<typeof userDeleteInput>;
+export type UserDeleteResponse = unknown;
 
 const userChatsInput = z.object({
     path: z.object({
@@ -401,6 +454,17 @@ const userChatsInput = z.object({
         .optional(),
 });
 export type UserChatsInput = z.infer<typeof userChatsInput>;
+export type UserChatsResponse = {
+    chats: Array<S.ChatResource>;
+    meta: { total?: number; output?: number };
+    pagination: {
+        items_per_page?: number;
+        current?: number;
+        total?: number;
+        next_page_url?: string | null;
+        prev_page_url?: string | null;
+    };
+};
 
 const userAddFcmTokenInput = z.object({
     path: z.object({
@@ -413,6 +477,7 @@ const userAddFcmTokenInput = z.object({
     }),
 });
 export type UserAddFcmTokenInput = z.infer<typeof userAddFcmTokenInput>;
+export type UserAddFcmTokenResponse = unknown;
 
 const tenantSetS3CredentialsInput = z.object({
     body: z.object({
@@ -427,6 +492,7 @@ const tenantSetS3CredentialsInput = z.object({
     }),
 });
 export type TenantSetS3CredentialsInput = z.infer<typeof tenantSetS3CredentialsInput>;
+export type TenantSetS3CredentialsResponse = { status?: boolean; modified?: boolean };
 
 const tenantSetWebhookSettingsInput = z.object({
     body: z.object({
@@ -435,6 +501,7 @@ const tenantSetWebhookSettingsInput = z.object({
     }),
 });
 export type TenantSetWebhookSettingsInput = z.infer<typeof tenantSetWebhookSettingsInput>;
+export type TenantSetWebhookSettingsResponse = unknown;
 
 const tenantSetFirebaseConfigForJsInput = z.object({
     body: z.object({
@@ -448,6 +515,7 @@ const tenantSetFirebaseConfigForJsInput = z.object({
     }),
 });
 export type TenantSetFirebaseConfigForJsInput = z.infer<typeof tenantSetFirebaseConfigForJsInput>;
+export type TenantSetFirebaseConfigForJsResponse = unknown;
 
 const tenantSetFirebaseServiceAccountInput = z.object({
     body: z.object({
@@ -465,6 +533,7 @@ const tenantSetFirebaseServiceAccountInput = z.object({
     }),
 });
 export type TenantSetFirebaseServiceAccountInput = z.infer<typeof tenantSetFirebaseServiceAccountInput>;
+export type TenantSetFirebaseServiceAccountResponse = unknown;
 
 const tenantSetFirebaseFcmVapidInput = z.object({
     body: z.object({
@@ -473,6 +542,7 @@ const tenantSetFirebaseFcmVapidInput = z.object({
     }),
 });
 export type TenantSetFirebaseFcmVapidInput = z.infer<typeof tenantSetFirebaseFcmVapidInput>;
+export type TenantSetFirebaseFcmVapidResponse = unknown;
 
 const tenantSetPushNotificationsSettingsInput = z.object({
     body: z.object({
@@ -482,6 +552,7 @@ const tenantSetPushNotificationsSettingsInput = z.object({
     }),
 });
 export type TenantSetPushNotificationsSettingsInput = z.infer<typeof tenantSetPushNotificationsSettingsInput>;
+export type TenantSetPushNotificationsSettingsResponse = unknown;
 
 const tenantClearDataInput = z
     .object({
@@ -493,11 +564,12 @@ const tenantClearDataInput = z
     })
     .optional();
 export type TenantClearDataInput = z.infer<typeof tenantClearDataInput>;
+export type TenantClearDataResponse = { status?: boolean };
 
 export function createOperations(transport: Transport) {
     return {
         /** List chats */
-        chatList: async <T = unknown>(input?: ChatListInput): Promise<T> => {
+        chatList: async <T = ChatListResponse>(input?: ChatListInput): Promise<T> => {
             const parsed = chatListInput.parse(input);
             const url = 'chats';
             const query = (parsed as { query?: Record<string, unknown> } | undefined)?.query;
@@ -505,7 +577,7 @@ export function createOperations(transport: Transport) {
         },
 
         /** Create a new chat */
-        chatCreate: async <T = unknown>(input: ChatCreateInput): Promise<T> => {
+        chatCreate: async <T = ChatCreateResponse>(input: ChatCreateInput): Promise<T> => {
             const parsed = chatCreateInput.parse(input);
             const url = 'chats';
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
@@ -515,14 +587,14 @@ export function createOperations(transport: Transport) {
         },
 
         /** Get chat details */
-        chatShow: async <T = unknown>(input: ChatShowInput): Promise<T> => {
+        chatShow: async <T = ChatShowResponse>(input: ChatShowInput): Promise<T> => {
             const parsed = chatShowInput.parse(input);
             const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}`;
             return transport.requestApi<T>(url, undefined, 'get');
         },
 
         /** Update chat */
-        chatUpdate: async <T = unknown>(input: ChatUpdateInput): Promise<T> => {
+        chatUpdate: async <T = ChatUpdateResponse>(input: ChatUpdateInput): Promise<T> => {
             const parsed = chatUpdateInput.parse(input);
             const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}`;
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
@@ -532,14 +604,14 @@ export function createOperations(transport: Transport) {
         },
 
         /** Delete chat */
-        chatDelete: async <T = unknown>(input: ChatDeleteInput): Promise<T> => {
+        chatDelete: async <T = ChatDeleteResponse>(input: ChatDeleteInput): Promise<T> => {
             const parsed = chatDeleteInput.parse(input);
             const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}`;
             return transport.requestApi<T>(url, undefined, 'delete');
         },
 
         /** List chat participants */
-        chatParticipants: async <T = unknown>(input: ChatParticipantsInput): Promise<T> => {
+        chatParticipants: async <T = ChatParticipantsResponse>(input: ChatParticipantsInput): Promise<T> => {
             const parsed = chatParticipantsInput.parse(input);
             const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}/participants`;
             const query = (parsed as { query?: Record<string, unknown> } | undefined)?.query;
@@ -547,7 +619,7 @@ export function createOperations(transport: Transport) {
         },
 
         /** Add participants to chat */
-        chatAddParticipants: async <T = unknown>(input: ChatAddParticipantsInput): Promise<T> => {
+        chatAddParticipants: async <T = ChatAddParticipantsResponse>(input: ChatAddParticipantsInput): Promise<T> => {
             const parsed = chatAddParticipantsInput.parse(input);
             const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}/participants`;
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
@@ -555,14 +627,18 @@ export function createOperations(transport: Transport) {
         },
 
         /** Get participant's per-chat rights */
-        chatGetParticipantRights: async <T = unknown>(input: ChatGetParticipantRightsInput): Promise<T> => {
+        chatGetParticipantRights: async <T = ChatGetParticipantRightsResponse>(
+            input: ChatGetParticipantRightsInput,
+        ): Promise<T> => {
             const parsed = chatGetParticipantRightsInput.parse(input);
             const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}/participants/${String((parsed as { path: Record<string, unknown> }).path['user_id'])}/rights`;
             return transport.requestApi<T>(url, undefined, 'get');
         },
 
         /** Override participant rights for this chat */
-        chatUpdateParticipantRights: async <T = unknown>(input: ChatUpdateParticipantRightsInput): Promise<T> => {
+        chatUpdateParticipantRights: async <T = ChatUpdateParticipantRightsResponse>(
+            input: ChatUpdateParticipantRightsInput,
+        ): Promise<T> => {
             const parsed = chatUpdateParticipantRightsInput.parse(input);
             const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}/participants/${String((parsed as { path: Record<string, unknown> }).path['user_id'])}/rights`;
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
@@ -570,21 +646,25 @@ export function createOperations(transport: Transport) {
         },
 
         /** Clear all participant rights for this chat */
-        chatDeleteParticipantRights: async <T = unknown>(input: ChatDeleteParticipantRightsInput): Promise<T> => {
+        chatDeleteParticipantRights: async <T = ChatDeleteParticipantRightsResponse>(
+            input: ChatDeleteParticipantRightsInput,
+        ): Promise<T> => {
             const parsed = chatDeleteParticipantRightsInput.parse(input);
             const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}/participants/${String((parsed as { path: Record<string, unknown> }).path['user_id'])}/rights`;
             return transport.requestApi<T>(url, undefined, 'delete');
         },
 
         /** Remove participant from chat */
-        chatDeleteParticipants: async <T = unknown>(input: ChatDeleteParticipantsInput): Promise<T> => {
+        chatDeleteParticipants: async <T = ChatDeleteParticipantsResponse>(
+            input: ChatDeleteParticipantsInput,
+        ): Promise<T> => {
             const parsed = chatDeleteParticipantsInput.parse(input);
             const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}/participants/${String((parsed as { path: Record<string, unknown> }).path['user_id'])}`;
             return transport.requestApi<T>(url, undefined, 'delete');
         },
 
         /** List messages in chat */
-        chatMessages: async <T = unknown>(input: ChatMessagesInput): Promise<T> => {
+        chatMessages: async <T = ChatMessagesResponse>(input: ChatMessagesInput): Promise<T> => {
             const parsed = chatMessagesInput.parse(input);
             const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}/messages`;
             const query = (parsed as { query?: Record<string, unknown> } | undefined)?.query;
@@ -592,7 +672,7 @@ export function createOperations(transport: Transport) {
         },
 
         /** Send messages to chat */
-        chatSendMessage: async <T = unknown>(input: ChatSendMessageInput): Promise<T> => {
+        chatSendMessage: async <T = ChatSendMessageResponse>(input: ChatSendMessageInput): Promise<T> => {
             const parsed = chatSendMessageInput.parse(input);
             const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}/messages`;
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
@@ -600,7 +680,7 @@ export function createOperations(transport: Transport) {
         },
 
         /** Update message */
-        chatUpdateMessage: async <T = unknown>(input: ChatUpdateMessageInput): Promise<T> => {
+        chatUpdateMessage: async <T = ChatUpdateMessageResponse>(input: ChatUpdateMessageInput): Promise<T> => {
             const parsed = chatUpdateMessageInput.parse(input);
             const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}/messages/${String((parsed as { path: Record<string, unknown> }).path['message'])}`;
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
@@ -610,7 +690,7 @@ export function createOperations(transport: Transport) {
         },
 
         /** Send typing indicator */
-        chatSendTyping: async <T = unknown>(input: ChatSendTypingInput): Promise<T> => {
+        chatSendTyping: async <T = ChatSendTypingResponse>(input: ChatSendTypingInput): Promise<T> => {
             const parsed = chatSendTypingInput.parse(input);
             const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}/typing/${String((parsed as { path: Record<string, unknown> }).path['user_id'])}`;
             const query = (parsed as { query?: Record<string, unknown> } | undefined)?.query;
@@ -618,7 +698,7 @@ export function createOperations(transport: Transport) {
         },
 
         /** Set chat webhook settings */
-        chatSetWebhook: async <T = unknown>(input: ChatSetWebhookInput): Promise<T> => {
+        chatSetWebhook: async <T = ChatSetWebhookResponse>(input: ChatSetWebhookInput): Promise<T> => {
             const parsed = chatSetWebhookInput.parse(input);
             const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}/webhook`;
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
@@ -626,7 +706,9 @@ export function createOperations(transport: Transport) {
         },
 
         /** Set S3 credentials for chat */
-        chatSetS3Credentials: async <T = unknown>(input: ChatSetS3CredentialsInput): Promise<T> => {
+        chatSetS3Credentials: async <T = ChatSetS3CredentialsResponse>(
+            input: ChatSetS3CredentialsInput,
+        ): Promise<T> => {
             const parsed = chatSetS3CredentialsInput.parse(input);
             const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}/s3-credentials`;
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
@@ -634,7 +716,7 @@ export function createOperations(transport: Transport) {
         },
 
         /** Create user */
-        userCreate: async <T = unknown>(input: UserCreateInput): Promise<T> => {
+        userCreate: async <T = UserCreateResponse>(input: UserCreateInput): Promise<T> => {
             const parsed = userCreateInput.parse(input);
             const url = 'users';
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
@@ -644,14 +726,14 @@ export function createOperations(transport: Transport) {
         },
 
         /** Get user details */
-        userShow: async <T = unknown>(input: UserShowInput): Promise<T> => {
+        userShow: async <T = UserShowResponse>(input: UserShowInput): Promise<T> => {
             const parsed = userShowInput.parse(input);
             const url = `users/${String((parsed as { path: Record<string, unknown> }).path['user_id'])}`;
             return transport.requestApi<T>(url, undefined, 'get');
         },
 
         /** Update user */
-        userUpdate: async <T = unknown>(input: UserUpdateInput): Promise<T> => {
+        userUpdate: async <T = UserUpdateResponse>(input: UserUpdateInput): Promise<T> => {
             const parsed = userUpdateInput.parse(input);
             const url = `users/${String((parsed as { path: Record<string, unknown> }).path['user_id'])}`;
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
@@ -661,14 +743,14 @@ export function createOperations(transport: Transport) {
         },
 
         /** Delete user */
-        userDelete: async <T = unknown>(input: UserDeleteInput): Promise<T> => {
+        userDelete: async <T = UserDeleteResponse>(input: UserDeleteInput): Promise<T> => {
             const parsed = userDeleteInput.parse(input);
             const url = `users/${String((parsed as { path: Record<string, unknown> }).path['user_id'])}`;
             return transport.requestApi<T>(url, undefined, 'delete');
         },
 
         /** Get user chats */
-        userChats: async <T = unknown>(input: UserChatsInput): Promise<T> => {
+        userChats: async <T = UserChatsResponse>(input: UserChatsInput): Promise<T> => {
             const parsed = userChatsInput.parse(input);
             const url = `users/${String((parsed as { path: Record<string, unknown> }).path['user_id'])}/chats`;
             const query = (parsed as { query?: Record<string, unknown> } | undefined)?.query;
@@ -676,7 +758,7 @@ export function createOperations(transport: Transport) {
         },
 
         /** Add FCM token */
-        userAddFcmToken: async <T = unknown>(input: UserAddFcmTokenInput): Promise<T> => {
+        userAddFcmToken: async <T = UserAddFcmTokenResponse>(input: UserAddFcmTokenInput): Promise<T> => {
             const parsed = userAddFcmTokenInput.parse(input);
             const url = `users/${String((parsed as { path: Record<string, unknown> }).path['user_id'])}/fcm_tokens`;
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
@@ -684,7 +766,9 @@ export function createOperations(transport: Transport) {
         },
 
         /** Set tenant S3 credentials */
-        tenantSetS3Credentials: async <T = unknown>(input: TenantSetS3CredentialsInput): Promise<T> => {
+        tenantSetS3Credentials: async <T = TenantSetS3CredentialsResponse>(
+            input: TenantSetS3CredentialsInput,
+        ): Promise<T> => {
             const parsed = tenantSetS3CredentialsInput.parse(input);
             const url = 's3-credentials';
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
@@ -692,7 +776,9 @@ export function createOperations(transport: Transport) {
         },
 
         /** Set tenant webhook settings */
-        tenantSetWebhookSettings: async <T = unknown>(input: TenantSetWebhookSettingsInput): Promise<T> => {
+        tenantSetWebhookSettings: async <T = TenantSetWebhookSettingsResponse>(
+            input: TenantSetWebhookSettingsInput,
+        ): Promise<T> => {
             const parsed = tenantSetWebhookSettingsInput.parse(input);
             const url = 'webhook';
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
@@ -700,7 +786,9 @@ export function createOperations(transport: Transport) {
         },
 
         /** Set Firebase config for JS */
-        tenantSetFirebaseConfigForJs: async <T = unknown>(input: TenantSetFirebaseConfigForJsInput): Promise<T> => {
+        tenantSetFirebaseConfigForJs: async <T = TenantSetFirebaseConfigForJsResponse>(
+            input: TenantSetFirebaseConfigForJsInput,
+        ): Promise<T> => {
             const parsed = tenantSetFirebaseConfigForJsInput.parse(input);
             const url = 'firebase/js_config';
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
@@ -708,7 +796,7 @@ export function createOperations(transport: Transport) {
         },
 
         /** Set Firebase service account */
-        tenantSetFirebaseServiceAccount: async <T = unknown>(
+        tenantSetFirebaseServiceAccount: async <T = TenantSetFirebaseServiceAccountResponse>(
             input: TenantSetFirebaseServiceAccountInput,
         ): Promise<T> => {
             const parsed = tenantSetFirebaseServiceAccountInput.parse(input);
@@ -718,7 +806,9 @@ export function createOperations(transport: Transport) {
         },
 
         /** Set Firebase FCM VAPID */
-        tenantSetFirebaseFcmVapid: async <T = unknown>(input: TenantSetFirebaseFcmVapidInput): Promise<T> => {
+        tenantSetFirebaseFcmVapid: async <T = TenantSetFirebaseFcmVapidResponse>(
+            input: TenantSetFirebaseFcmVapidInput,
+        ): Promise<T> => {
             const parsed = tenantSetFirebaseFcmVapidInput.parse(input);
             const url = 'firebase/fcm_vapid';
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
@@ -726,7 +816,7 @@ export function createOperations(transport: Transport) {
         },
 
         /** Set push notification settings */
-        tenantSetPushNotificationsSettings: async <T = unknown>(
+        tenantSetPushNotificationsSettings: async <T = TenantSetPushNotificationsSettingsResponse>(
             input: TenantSetPushNotificationsSettingsInput,
         ): Promise<T> => {
             const parsed = tenantSetPushNotificationsSettingsInput.parse(input);
@@ -736,7 +826,7 @@ export function createOperations(transport: Transport) {
         },
 
         /** Clear tenant data */
-        tenantClearData: async <T = unknown>(input?: TenantClearDataInput): Promise<T> => {
+        tenantClearData: async <T = TenantClearDataResponse>(input?: TenantClearDataInput): Promise<T> => {
             const parsed = tenantClearDataInput.parse(input);
             const url = 'clear';
             const query = (parsed as { query?: Record<string, unknown> } | undefined)?.query;

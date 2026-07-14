@@ -119,6 +119,8 @@ sdk.api.chatSendMessage({
 
 Header params (e.g. `Prefer`) ride a `header:` slot alongside `path`/`query`/`body`.
 
+Each method is typed `async <T = XResponse>(...): Promise<T>` — the default `T` is a generated `XResponse` type derived from the operation's `200`/`201` JSON schema (e.g. `ChatListResponse`), so callers get a typed envelope (`{ status, data, pagination, … }`) without passing `<T>`. Responses are **not** Zod-validated at runtime (the SDK is pass-through); `XResponse` is a plain TS type emitted by `emitType`, not a schema. Pass an explicit `<T>` to override.
+
 `Emby` wires it up in its constructor: `this.api = createOperations(this)`. `this` satisfies the `Transport` interface (a 6-arg `requestApi(method, params, type, version, query, headers)`).
 
 **Generator quirks worth knowing:**
