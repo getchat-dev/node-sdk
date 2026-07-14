@@ -38,6 +38,17 @@ describe('per-call cancellation & overrides', () => {
         assert.equal(server.requests.length, 1);
     });
 
+    test('a cancel during the retry backoff rejects and skips the next attempt', async () => {
+        server.respondWith({ status: 503, body: {} }); // first attempt fails retryably (instant)
+        server.respondWith({ status: 200, body: { ok: true } }); // must never be consumed
+        const ac = new AbortController();
+        // Big backoff (>= 300ms) so there's a window to cancel mid-wait; GET so the 503 is retryable.
+        const p = sdk({ retries: 3, retryDelay: 300 }).api.chatShow({ path: { chat_id: 'c1' }, signal: ac.signal });
+        setTimeout(() => ac.abort(), 60); // first 503 is instant → we're in the backoff sleep by now
+        await assert.rejects(p, (e) => (e as Error).name === 'AbortError');
+        assert.equal(server.requests.length, 1); // the second attempt never left
+    });
+
     test('an already-aborted signal rejects before sending', async () => {
         server.respondWith({ status: 200, body: { ok: true } });
         const ac = new AbortController();
