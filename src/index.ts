@@ -47,8 +47,8 @@ import * as _ from './libs/helpers.js';
 import processUserRights from './libs/processUserRights.js';
 import {
     type RequestControlOptions,
-    resolveControlOverrides,
     type ResolvedRequestOptions,
+    resolveControlOverrides,
     resolveRequestOptions,
     TimeoutError,
 } from './libs/requestOptions.js';
