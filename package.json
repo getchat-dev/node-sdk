@@ -20,7 +20,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "generate": "tsx scripts/generate.ts && npm run format",
+    "generate": "tsx scripts/generate.ts && biome format --write src/generated",
     "build": "npm run build:clean && npm run build:cjs && npm run build:esm && npm run build:pkgjson",
     "build:clean": "rm -rf dist",
     "build:cjs": "tsc -p tsconfig.cjs.json",
