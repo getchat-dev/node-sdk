@@ -465,7 +465,7 @@ const emby = new Emby({
 
 Invalid values throw at construction (they are Zod-validated).
 
-- **Timeout** — a request that outruns `timeout` aborts and rejects with a `TimeoutError` (`err.name === 'TimeoutError'`, `err.code === 'ETIMEDOUT'`). Without it a stuck backend would hang the caller forever.
+- **Timeout** — applied **per attempt**. A request that outruns `timeout` aborts and rejects with a `TimeoutError` (`err.name === 'TimeoutError'`, `err.code === 'ETIMEDOUT'`). A timed-out `GET`/`DELETE` is retried like any other transient failure, so a stuck backend can take up to about `(retries + 1) × timeout` (plus backoff) before the call finally gives up — pass a `signal` if you need one hard deadline across the whole call. A timed-out `POST`/`PUT` is **not** retried (the write may already have landed).
 - **Retries** — `GET`/`DELETE` retry on network errors, `5xx` and `429`. `POST`/`PUT` retry **only** on `429` (a `Retry-After` header is honored) and on connection errors that never reached the server — so a write is never silently duplicated. Backoff grows exponentially with jitter.
 
 ### Per-call overrides & cancellation
@@ -484,7 +484,7 @@ const p = emby.api.chatShow({
 ac.abort(); // p rejects with an AbortError; a cancelled request is never retried
 ```
 
-These control fields are stripped before the request is sent — they never reach the wire.
+These control fields are stripped before the request is sent — they never reach the wire. The numeric ones (`timeout`/`retries`/`retryDelay`) share the same validation as the constructor options, so a bad value (e.g. `retries` above the cap) throws.
 
 ---
 

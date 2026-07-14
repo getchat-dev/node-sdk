@@ -91,11 +91,11 @@ All requests carry `Authorization: Bearer ${apiToken}`. Non-2xx/3xx responses re
 
 **Reliability** (1.15) — each attempt runs under a timeout and failures are retried per the method's idempotency. Defaults live on the instance (`config.options`, Zod-validated by `resolveRequestOptions` in `libs/requestOptions.ts`) and are overridable per call via the 7th `control` arg:
 
-- **timeout** (default 30000ms; 0 disables) — a per-attempt `AbortController` + `setTimeout` (Node 16 has no `AbortSignal.timeout`); on expiry rejects `TimeoutError`.
+- **timeout** (default 30000ms; 0 disables) — a per-attempt `AbortController` + `setTimeout` (Node 16 has no `AbortSignal.timeout`); on expiry rejects `TimeoutError`. Because `TimeoutError.code === 'ETIMEDOUT'`, `shouldRetry` treats it as a transport error: a timed-out GET/DELETE is retried, a timed-out POST/PUT is not — so total wall-clock for a hung read can reach ~`(retries+1) × timeout` (+ backoff).
 - **retries** (default 2) + **retryDelay** (200ms base) — `runWithRetry` loops attempts; `shouldRetry` (`libs/retry.ts`) allows GET/DELETE on network/5xx/429 but POST/PUT only on 429 + pre-send connection errors (so a write is never duplicated). Exponential backoff + jitter, honoring `Retry-After`.
 - **signal** (per-call only) — merged with the timeout into one controller; a caller cancel rejects with `signal.reason`/`AbortError`, is never retried, and aborts an in-progress backoff (`sleep` is abortable).
 
-The per-call fields (`signal`/`timeout`/`retries`/`retryDelay`) ride every `.api.*` input via `RequestControlOptions`; `pickRequestControl` pulls them out before the Zod parse strips them from the wire payload.
+The per-call fields (`signal`/`timeout`/`retries`/`retryDelay`) ride every `.api.*` input via `RequestControlOptions`; `pickRequestControl` pulls them out and `resolveControlOverrides` validates the numeric ones against the same bounds as the instance options (so a per-call `retries: 15` throws too, not only an instance one) before the Zod parse strips them from the wire payload.
 
 `baseUrl` has trailing slashes stripped in the constructor (`replace(/\/+$/g, '')`); `apiUrl` defaults to `baseUrl` if not provided separately.
 
