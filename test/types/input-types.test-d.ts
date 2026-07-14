@@ -6,15 +6,21 @@
 //   A. Public wrapper signatures are frozen (`Parameters<>` equality) — CLAUDE.md
 //      says they "must not be changed without a version bump"; this turns that
 //      into a compile error instead of a code-review hope.
-//   B. `.api.*` input types reject missing / mis-typed required fields.
+//   B. `.api.*` input types reject missing / mis-typed required fields (six ops,
+//      specific-field depth).
 //   C. An explicit `<T>` overrides the generated response default.
 //   D. The `Avatar` oneOf accepts both of its branches and rejects a bad shape.
 //   E. `requestApi` stays `<T = unknown>` (raw transport, never narrowed).
+//   F. Every one of the 30 operations: empty input is rejected unless the whole
+//      input is optional (breadth complement to B — guards required-ness).
+//   G. The `Prefer` header slot's exact union is pinned on all five ops that carry it.
+//   H. Excess (unknown) properties are rejected at the call site.
 //
-// Negatives use assignability (`ExpectFalse<V extends Input>`) rather than
-// `@ts-expect-error`: it is immune to line-reflow by the formatter and speaks
-// the same Equal/Expect vocabulary as the rest of the suite. (It does not model
-// excess-property checking — that is intentionally out of scope.)
+// Most negatives use assignability (`ExpectFalse<V extends Input>`): it is immune
+// to line-reflow by the formatter and speaks the same Equal/Expect vocabulary as
+// the rest of the suite. Excess-property rejection (H) is the exception — it is a
+// literal/call-site feature TS cannot express structurally (`{ a; b } extends { a }`
+// is true), so those few use `@ts-expect-error` at a real call site.
 
 import type { Avatar } from '../../src/generated/schemas.js';
 import type { ChatArg, Emby, MessageTextInput, UpdateMessageInput, UpdateMessageOptions } from '../../src/index.js';
@@ -184,3 +190,101 @@ export function _requestApiDefault() {
     return emby.requestApi('chats');
 }
 export type _requestApiUnknown = Expect<Equal<Awaited<ReturnType<typeof _requestApiDefault>>, unknown>>;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// F. Exhaustive required-ness across ALL 30 operations. Empty input must be
+//    REJECTED by every op with a required path/body, and ACCEPTED only by the two
+//    whose entire input is optional (`chatList`, `tenantClearData`). This is the
+//    breadth complement to the specific-field negatives above: it guards against a
+//    codegen regression silently making a path/body optional. (It asserts that
+//    *something* is required, not which field — the six ops above pin fields.)
+// ─────────────────────────────────────────────────────────────────────────────
+
+type Empty = Record<string, never>;
+
+export type _reqChatList = Expect<AcceptsInput<'chatList', Empty>>; // fully-optional input
+export type _reqTenantClearData = Expect<AcceptsInput<'tenantClearData', Empty>>; // fully-optional input
+
+export type _reqChatCreate = ExpectFalse<AcceptsInput<'chatCreate', Empty>>;
+export type _reqChatShow = ExpectFalse<AcceptsInput<'chatShow', Empty>>;
+export type _reqChatUpdate = ExpectFalse<AcceptsInput<'chatUpdate', Empty>>;
+export type _reqChatDelete = ExpectFalse<AcceptsInput<'chatDelete', Empty>>;
+export type _reqChatParticipants = ExpectFalse<AcceptsInput<'chatParticipants', Empty>>;
+export type _reqChatAddParticipants = ExpectFalse<AcceptsInput<'chatAddParticipants', Empty>>;
+export type _reqChatGetParticipantRights = ExpectFalse<AcceptsInput<'chatGetParticipantRights', Empty>>;
+export type _reqChatUpdateParticipantRights = ExpectFalse<AcceptsInput<'chatUpdateParticipantRights', Empty>>;
+export type _reqChatDeleteParticipantRights = ExpectFalse<AcceptsInput<'chatDeleteParticipantRights', Empty>>;
+export type _reqChatDeleteParticipants = ExpectFalse<AcceptsInput<'chatDeleteParticipants', Empty>>;
+export type _reqChatMessages = ExpectFalse<AcceptsInput<'chatMessages', Empty>>;
+export type _reqChatSendMessage = ExpectFalse<AcceptsInput<'chatSendMessage', Empty>>;
+export type _reqChatUpdateMessage = ExpectFalse<AcceptsInput<'chatUpdateMessage', Empty>>;
+export type _reqChatSendTyping = ExpectFalse<AcceptsInput<'chatSendTyping', Empty>>;
+export type _reqChatSetWebhook = ExpectFalse<AcceptsInput<'chatSetWebhook', Empty>>;
+export type _reqChatSetS3Credentials = ExpectFalse<AcceptsInput<'chatSetS3Credentials', Empty>>;
+export type _reqUserCreate = ExpectFalse<AcceptsInput<'userCreate', Empty>>;
+export type _reqUserShow = ExpectFalse<AcceptsInput<'userShow', Empty>>;
+export type _reqUserUpdate = ExpectFalse<AcceptsInput<'userUpdate', Empty>>;
+export type _reqUserDelete = ExpectFalse<AcceptsInput<'userDelete', Empty>>;
+export type _reqUserChats = ExpectFalse<AcceptsInput<'userChats', Empty>>;
+export type _reqUserAddFcmToken = ExpectFalse<AcceptsInput<'userAddFcmToken', Empty>>;
+export type _reqTenantSetS3Credentials = ExpectFalse<AcceptsInput<'tenantSetS3Credentials', Empty>>;
+export type _reqTenantSetWebhookSettings = ExpectFalse<AcceptsInput<'tenantSetWebhookSettings', Empty>>;
+export type _reqTenantSetFirebaseConfigForJs = ExpectFalse<AcceptsInput<'tenantSetFirebaseConfigForJs', Empty>>;
+export type _reqTenantSetFirebaseServiceAccount = ExpectFalse<AcceptsInput<'tenantSetFirebaseServiceAccount', Empty>>;
+export type _reqTenantSetFirebaseFcmVapid = ExpectFalse<AcceptsInput<'tenantSetFirebaseFcmVapid', Empty>>;
+export type _reqTenantSetPushNotificationsSettings = ExpectFalse<
+    AcceptsInput<'tenantSetPushNotificationsSettings', Empty>
+>;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// G. Header slot. Five ops carry an optional `Prefer` header (RFC 7240). Pin its
+//    exact union for each — a regenerate that drops a value, adds one, or loses
+//    the slot flips the Equal. Extracting the slot type avoids building a full
+//    valid body just to reach the header.
+// ─────────────────────────────────────────────────────────────────────────────
+
+type PreferOf<K extends keyof Api> =
+    NonNullable<Parameters<Api[K]>[0]> extends { header?: { Prefer?: infer P } } ? P : never;
+type PreferEnum = 'return=representation' | 'return=minimal';
+
+export type _hdrChatCreate = Expect<Equal<NonNullable<PreferOf<'chatCreate'>>, PreferEnum>>;
+export type _hdrChatUpdate = Expect<Equal<NonNullable<PreferOf<'chatUpdate'>>, PreferEnum>>;
+export type _hdrChatUpdateMessage = Expect<Equal<NonNullable<PreferOf<'chatUpdateMessage'>>, PreferEnum>>;
+export type _hdrUserCreate = Expect<Equal<NonNullable<PreferOf<'userCreate'>>, PreferEnum>>;
+export type _hdrUserUpdate = Expect<Equal<NonNullable<PreferOf<'userUpdate'>>, PreferEnum>>;
+// The header slot itself is omittable (optional).
+export type _hdrOptional = Expect<Assignable<undefined, Parameters<Api['chatUpdateMessage']>[0]['header']>>;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// H. Excess-property rejection. This is a literal / call-site feature (TS only
+//    flags unknown keys on fresh object literals) and is NOT expressible via
+//    assignability — `{ a; b } extends { a }` is true. So these use real call
+//    sites + `@ts-expect-error`, positioned directly before the offending key.
+//    The surrounding comment keeps the formatter from collapsing the literal and
+//    detaching the directive. If excess-checking ever stopped firing, the now
+//    unused directive would itself error (TS2578) — the assertion is self-teething.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function _excessRejected() {
+    return [
+        emby.api.chatShow({
+            path: { chat_id: 'c1' },
+            // @ts-expect-error `bogus` is not a known top-level input field
+            bogus: true,
+        }),
+        emby.api.chatShow({
+            path: {
+                chat_id: 'c1',
+                // @ts-expect-error `bogus` is not a known field inside `path`
+                bogus: true,
+            },
+        }),
+        emby.api.chatCreate({
+            body: {
+                chat: { id: 'c1', title: 'T', type: 'group' },
+                // @ts-expect-error `bogus` is not a known field inside `body`
+                bogus: true,
+            },
+        }),
+    ];
+}
