@@ -449,7 +449,9 @@ export class Emby {
         // with_owners: lenient input (bool/yes/on/1/0/numeric) → spec wire integer 0|1.
         if (!_.isNoValue(queryParams.with_owners)) {
             const raw = queryParams.with_owners as unknown;
-            if (_.isBoolean(raw) || _.isTRUE(raw)) {
+            if (_.isBoolean(raw)) {
+                query.with_owners = raw ? 1 : 0;
+            } else if (_.isTRUE(raw)) {
                 query.with_owners = 1;
             } else if (_.isNumeric(raw)) {
                 const n = parseInt(String(raw), 10);

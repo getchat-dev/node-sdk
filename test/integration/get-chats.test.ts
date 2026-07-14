@@ -61,6 +61,12 @@ describe('Emby.getChats()', () => {
         assert.match(server.lastRequest!.path!, /with_owners=1/);
     });
 
+    test('with_owners=false is coerced to 0 (not 1)', async () => {
+        server.respondWith(loadFixture('chats/list/success'));
+        await sdk.getChats({ with_owners: false });
+        assert.match(server.lastRequest!.path!, /with_owners=0/);
+    });
+
     test('with_owners="yes" is coerced to 1', async () => {
         server.respondWith(loadFixture('chats/list/with-owners'));
         await sdk.getChats({ with_owners: 'yes' as unknown as boolean });
