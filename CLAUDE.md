@@ -48,6 +48,8 @@ test/
 ├── helpers/              — mockServer, sdkFactory, loadFixture, seededRandom
 ├── unit/*.test.ts        — helpers, signing, processUserRights
 ├── integration/*.test.ts — per-method tests against in-process mock server
+├── types/*.test-d.ts     — compile-time type assertions (response types, wrapper defaults);
+│                           enforced by `npm run typecheck`, NOT run by `node --test`
 ├── fixtures/             — JSON response fixtures
 └── live/                 — opt-in E2E against real backend (happy-path, wire-format, edge-cases)
 
@@ -96,7 +98,9 @@ All requests carry `Authorization: Bearer ${apiToken}`. Non-2xx/3xx responses re
 
 The public signatures in `src/index.ts` are stable consumer API and **must not be changed** without a version bump. The wire format they produce is now spec-aligned (e.g. `is_deleted: true` boolean, was `'1'` string before 1.13; `with_users=1` snake_case wire, was buggy `withUsers=1` before — backend silently ignored it). Backend is lenient and accepts both forms in most places, but wherever live tests revealed a divergence, the spec was patched and the adapter brought into line.
 
-If you add a new high-level method, the same pattern applies: a thin coercing wrapper around `this.api.<operationId>(...)`. Don't reach for `requestApi` directly unless you have a reason the spec can't express.
+Each wrapper defaults its return generic to the matching operation's `XResponse` type (e.g. `getChatInfo<T = ChatShowResponse>`), so callers get a typed response without passing `<T>`; an explicit `<T>` still overrides. `requestApi` itself stays `<T = unknown>` (it's the raw transport).
+
+If you add a new high-level method, the same pattern applies: a thin coercing wrapper around `this.api.<operationId>(...)`, defaulting `T` to the operation's `XResponse`. Don't reach for `requestApi` directly unless you have a reason the spec can't express.
 
 ### Auto-generated `.api.*` methods
 

@@ -3,16 +3,33 @@ import * as http from 'node:http';
 import * as https from 'node:https';
 import * as querystring from 'node:querystring';
 import {
+    type ChatAddParticipantsResponse,
     type ChatCreateInput,
+    type ChatCreateResponse,
+    type ChatDeleteParticipantsResponse,
+    type ChatDeleteResponse,
     type ChatListInput,
+    type ChatListResponse,
     type ChatMessagesInput,
+    type ChatMessagesResponse,
     type ChatParticipantsInput,
+    type ChatParticipantsResponse,
     type ChatSendMessageInput,
+    type ChatSendMessageResponse,
+    type ChatSendTypingResponse,
+    type ChatShowResponse,
     type ChatUpdateInput,
+    type ChatUpdateMessageResponse,
+    type ChatUpdateResponse,
     createOperations,
     type Operations,
     type UserChatsInput,
+    type UserChatsResponse,
+    type UserCreateResponse,
+    type UserDeleteResponse,
+    type UserShowResponse,
     type UserUpdateInput,
+    type UserUpdateResponse,
 } from './generated/operations.js';
 
 // Convenience aliases for query/body slots — used when hand-written methods
@@ -424,7 +441,7 @@ export class Emby {
         return `${this.baseUrl}?${query}`;
     }
 
-    getChats<T = unknown>(queryParams: GetChatsQuery = {}): Promise<T> {
+    getChats<T = ChatListResponse>(queryParams: GetChatsQuery = {}): Promise<T> {
         if (!_.isPlainObject(queryParams)) {
             throw new Error('queryParams must be a plain object');
         }
@@ -468,7 +485,7 @@ export class Emby {
         return this.api.chatList<T>({ query: query as ChatListQuery });
     }
 
-    getChatInfo<T = unknown>(id: string): Promise<T> {
+    getChatInfo<T = ChatShowResponse>(id: string): Promise<T> {
         if (!_.isString(id)) {
             throw new Error("chat id isn't passed");
         }
@@ -480,7 +497,7 @@ export class Emby {
      * Now coerces to spec `with_users=1` (snake_case + integer wire). Public-API field name
      * remains `with_users` (matches `GetChatMessagesQuery`); legacy `withUsers` callers also accepted.
      */
-    getMessagesFromChat<T = unknown>(
+    getMessagesFromChat<T = ChatMessagesResponse>(
         chatId: string,
         queryParams?: GetChatMessagesQuery,
         page = 1,
@@ -523,7 +540,7 @@ export class Emby {
         return this.api.chatMessages<T>({ path: { chat_id: chatId }, query: query as ChatMessagesQuery });
     }
 
-    sendMessage<T = unknown>(
+    sendMessage<T = ChatSendMessageResponse>(
         chat: ChatArg,
         user: User,
         participants: Participant[] | undefined,
@@ -592,7 +609,7 @@ export class Emby {
      * `returnMessage` maps to the RFC 7240 `Prefer: return=representation` header
      * (the legacy `return_message` body field and `?result=yes` flag were dropped).
      */
-    updateMessage<T = unknown>(
+    updateMessage<T = ChatUpdateMessageResponse>(
         chatId: string,
         messageId: string,
         { text, isDeleted = false, extra = {}, buttons = [] }: UpdateMessageInput,
@@ -633,7 +650,7 @@ export class Emby {
      * Soft-delete a message. Wire format aligned with the openapi spec (`is_deleted: true` boolean).
      * Backend is lenient — accepts both `true` and `'1'` — but spec is authoritative going forward.
      */
-    deleteMessage<T = unknown>(chatId: string, messageId: string): Promise<T> {
+    deleteMessage<T = ChatUpdateMessageResponse>(chatId: string, messageId: string): Promise<T> {
         return this.api.chatUpdateMessage<T>({
             path: { chat_id: chatId, message: messageId },
             body: { message: { is_deleted: true } },
@@ -646,11 +663,14 @@ export class Emby {
      * (`PUT /chats/{chat_id}/typing` with `{ user: userId }` body) is no longer used.
      * Verified live; legacy URL silently failed.
      */
-    sendTyping<T = unknown>(chatId: string, userId: string): Promise<T> {
+    sendTyping<T = ChatSendTypingResponse>(chatId: string, userId: string): Promise<T> {
         return this.api.chatSendTyping<T>({ path: { chat_id: chatId, user_id: userId } });
     }
 
-    addParticipantsToChat<T = unknown>(chatId: string, participants: Participant[] = []): Promise<T> {
+    addParticipantsToChat<T = ChatAddParticipantsResponse>(
+        chatId: string,
+        participants: Participant[] = [],
+    ): Promise<T> {
         if (!_.isFilledArray(participants)) {
             throw new Error('participants have to be an array of participant objects');
         }
@@ -680,7 +700,7 @@ export class Emby {
      * @param chat            Chat fields: { id, title, type, metadata?, owner? }.
      * @param participants    Optional participants array (required for private chats).
      */
-    createChat<T = unknown>(chat: ChatCreate, participants?: Participant[]): Promise<T> {
+    createChat<T = ChatCreateResponse>(chat: ChatCreate, participants?: Participant[]): Promise<T> {
         if (!_.isFilledPlainObject(chat)) {
             throw new Error('chat must be a non-empty object');
         }
@@ -694,7 +714,7 @@ export class Emby {
     /**
      * Update mutable chat fields (title, metadata, id).
      */
-    updateChat<T = unknown>(chatId: string, updates: ChatUpdate = {}): Promise<T> {
+    updateChat<T = ChatUpdateResponse>(chatId: string, updates: ChatUpdate = {}): Promise<T> {
         if (!_.isString(chatId)) {
             throw new Error("chat id isn't passed");
         }
@@ -707,7 +727,7 @@ export class Emby {
     /**
      * Delete a chat permanently.
      */
-    deleteChat<T = unknown>(chatId: string): Promise<T> {
+    deleteChat<T = ChatDeleteResponse>(chatId: string): Promise<T> {
         if (!_.isString(chatId)) {
             throw new Error("chat id isn't passed");
         }
@@ -717,7 +737,7 @@ export class Emby {
     /**
      * List participants of a chat (paginated).
      */
-    getChatParticipants<T = unknown>(chatId: string, query: PaginationQuery = {}): Promise<T> {
+    getChatParticipants<T = ChatParticipantsResponse>(chatId: string, query: PaginationQuery = {}): Promise<T> {
         if (!_.isString(chatId)) {
             throw new Error("chat id isn't passed");
         }
@@ -734,7 +754,7 @@ export class Emby {
     /**
      * Remove a single participant from a chat by user id.
      */
-    removeParticipantFromChat<T = unknown>(chatId: string, userId: string): Promise<T> {
+    removeParticipantFromChat<T = ChatDeleteParticipantsResponse>(chatId: string, userId: string): Promise<T> {
         if (!_.isString(chatId)) {
             throw new Error("chat id isn't passed");
         }
@@ -753,7 +773,7 @@ export class Emby {
     /**
      * Create a user.
      */
-    createUser<T = unknown>(user: User): Promise<T> {
+    createUser<T = UserCreateResponse>(user: User): Promise<T> {
         if (!_.isFilledPlainObject(user)) {
             throw new Error('user must be a non-empty object');
         }
@@ -763,7 +783,7 @@ export class Emby {
     /**
      * Get a user by id.
      */
-    getUser<T = unknown>(userId: string): Promise<T> {
+    getUser<T = UserShowResponse>(userId: string): Promise<T> {
         if (!_.isString(userId)) {
             throw new Error("user id isn't passed");
         }
@@ -773,7 +793,7 @@ export class Emby {
     /**
      * Update mutable user fields.
      */
-    updateUser<T = unknown>(userId: string, updates: Partial<User> = {}): Promise<T> {
+    updateUser<T = UserUpdateResponse>(userId: string, updates: Partial<User> = {}): Promise<T> {
         if (!_.isString(userId)) {
             throw new Error("user id isn't passed");
         }
@@ -786,7 +806,7 @@ export class Emby {
     /**
      * Delete a user permanently.
      */
-    deleteUser<T = unknown>(userId: string): Promise<T> {
+    deleteUser<T = UserDeleteResponse>(userId: string): Promise<T> {
         if (!_.isString(userId)) {
             throw new Error("user id isn't passed");
         }
@@ -796,7 +816,7 @@ export class Emby {
     /**
      * List chats associated with a user (paginated, filterable by metadata / read state / order).
      */
-    getUserChats<T = unknown>(userId: string, query: GetUserChatsQuery = {}): Promise<T> {
+    getUserChats<T = UserChatsResponse>(userId: string, query: GetUserChatsQuery = {}): Promise<T> {
         if (!_.isString(userId)) {
             throw new Error("user id isn't passed");
         }
