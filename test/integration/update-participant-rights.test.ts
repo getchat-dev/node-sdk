@@ -22,16 +22,28 @@ describe('Emby.updateParticipantRights()', () => {
     });
 
     test('throws when chat id is not a string', () => {
-        assert.throws(() => sdk.updateParticipantRights(undefined as unknown as string, 'u1', { send_messages: false }), /chat id isn't passed/);
-        assert.throws(() => sdk.updateParticipantRights(123 as unknown as string, 'u1', { send_messages: false }), /chat id isn't passed/);
+        assert.throws(
+            () => sdk.updateParticipantRights(undefined as unknown as string, 'u1', { send_messages: false }),
+            /chat id isn't passed/,
+        );
+        assert.throws(
+            () => sdk.updateParticipantRights(123 as unknown as string, 'u1', { send_messages: false }),
+            /chat id isn't passed/,
+        );
     });
 
     test('throws when user id is not a string', () => {
-        assert.throws(() => sdk.updateParticipantRights('c1', undefined as unknown as string, { send_messages: false }), /user id isn't passed/);
+        assert.throws(
+            () => sdk.updateParticipantRights('c1', undefined as unknown as string, { send_messages: false }),
+            /user id isn't passed/,
+        );
     });
 
     test('throws when rights is missing or empty', () => {
-        assert.throws(() => sdk.updateParticipantRights('c1', 'u1', undefined as never), /rights must be a non-empty object/);
+        assert.throws(
+            () => sdk.updateParticipantRights('c1', 'u1', undefined as never),
+            /rights must be a non-empty object/,
+        );
         assert.throws(() => sdk.updateParticipantRights('c1', 'u1', {}), /rights must be a non-empty object/);
     });
 

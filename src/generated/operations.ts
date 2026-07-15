@@ -597,7 +597,7 @@ export function createOperations(transport: Transport) {
         chatShow: async <T = ChatShowResponse>(input: ChatShowInput): Promise<T> => {
             const parsed = chatShowInput.parse(input);
             const control = pickRequestControl(input);
-            const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}`;
+            const url = `chats/${String((parsed as { path: Record<string, unknown> }).path.chat_id)}`;
             return transport.requestApi<T>(url, undefined, 'get', undefined, undefined, undefined, control);
         },
 
@@ -605,7 +605,7 @@ export function createOperations(transport: Transport) {
         chatUpdate: async <T = ChatUpdateResponse>(input: ChatUpdateInput): Promise<T> => {
             const parsed = chatUpdateInput.parse(input);
             const control = pickRequestControl(input);
-            const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}`;
+            const url = `chats/${String((parsed as { path: Record<string, unknown> }).path.chat_id)}`;
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
             const query = (parsed as { query?: Record<string, unknown> } | undefined)?.query;
             const header = (parsed as { header?: Record<string, unknown> } | undefined)?.header;
@@ -616,7 +616,7 @@ export function createOperations(transport: Transport) {
         chatDelete: async <T = ChatDeleteResponse>(input: ChatDeleteInput): Promise<T> => {
             const parsed = chatDeleteInput.parse(input);
             const control = pickRequestControl(input);
-            const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}`;
+            const url = `chats/${String((parsed as { path: Record<string, unknown> }).path.chat_id)}`;
             return transport.requestApi<T>(url, undefined, 'delete', undefined, undefined, undefined, control);
         },
 
@@ -624,7 +624,7 @@ export function createOperations(transport: Transport) {
         chatParticipants: async <T = ChatParticipantsResponse>(input: ChatParticipantsInput): Promise<T> => {
             const parsed = chatParticipantsInput.parse(input);
             const control = pickRequestControl(input);
-            const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}/participants`;
+            const url = `chats/${String((parsed as { path: Record<string, unknown> }).path.chat_id)}/participants`;
             const query = (parsed as { query?: Record<string, unknown> } | undefined)?.query;
             return transport.requestApi<T>(url, query, 'get', undefined, undefined, undefined, control);
         },
@@ -633,7 +633,7 @@ export function createOperations(transport: Transport) {
         chatAddParticipants: async <T = ChatAddParticipantsResponse>(input: ChatAddParticipantsInput): Promise<T> => {
             const parsed = chatAddParticipantsInput.parse(input);
             const control = pickRequestControl(input);
-            const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}/participants`;
+            const url = `chats/${String((parsed as { path: Record<string, unknown> }).path.chat_id)}/participants`;
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
             return transport.requestApi<T>(url, body, 'post', undefined, undefined, undefined, control);
         },
@@ -644,7 +644,7 @@ export function createOperations(transport: Transport) {
         ): Promise<T> => {
             const parsed = chatGetParticipantRightsInput.parse(input);
             const control = pickRequestControl(input);
-            const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}/participants/${String((parsed as { path: Record<string, unknown> }).path['user_id'])}/rights`;
+            const url = `chats/${String((parsed as { path: Record<string, unknown> }).path.chat_id)}/participants/${String((parsed as { path: Record<string, unknown> }).path.user_id)}/rights`;
             return transport.requestApi<T>(url, undefined, 'get', undefined, undefined, undefined, control);
         },
 
@@ -654,7 +654,7 @@ export function createOperations(transport: Transport) {
         ): Promise<T> => {
             const parsed = chatUpdateParticipantRightsInput.parse(input);
             const control = pickRequestControl(input);
-            const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}/participants/${String((parsed as { path: Record<string, unknown> }).path['user_id'])}/rights`;
+            const url = `chats/${String((parsed as { path: Record<string, unknown> }).path.chat_id)}/participants/${String((parsed as { path: Record<string, unknown> }).path.user_id)}/rights`;
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
             return transport.requestApi<T>(url, body, 'put', undefined, undefined, undefined, control);
         },
@@ -665,7 +665,7 @@ export function createOperations(transport: Transport) {
         ): Promise<T> => {
             const parsed = chatDeleteParticipantRightsInput.parse(input);
             const control = pickRequestControl(input);
-            const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}/participants/${String((parsed as { path: Record<string, unknown> }).path['user_id'])}/rights`;
+            const url = `chats/${String((parsed as { path: Record<string, unknown> }).path.chat_id)}/participants/${String((parsed as { path: Record<string, unknown> }).path.user_id)}/rights`;
             return transport.requestApi<T>(url, undefined, 'delete', undefined, undefined, undefined, control);
         },
 
@@ -675,7 +675,7 @@ export function createOperations(transport: Transport) {
         ): Promise<T> => {
             const parsed = chatDeleteParticipantsInput.parse(input);
             const control = pickRequestControl(input);
-            const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}/participants/${String((parsed as { path: Record<string, unknown> }).path['user_id'])}`;
+            const url = `chats/${String((parsed as { path: Record<string, unknown> }).path.chat_id)}/participants/${String((parsed as { path: Record<string, unknown> }).path.user_id)}`;
             return transport.requestApi<T>(url, undefined, 'delete', undefined, undefined, undefined, control);
         },
 
@@ -683,7 +683,7 @@ export function createOperations(transport: Transport) {
         chatMessages: async <T = ChatMessagesResponse>(input: ChatMessagesInput): Promise<T> => {
             const parsed = chatMessagesInput.parse(input);
             const control = pickRequestControl(input);
-            const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}/messages`;
+            const url = `chats/${String((parsed as { path: Record<string, unknown> }).path.chat_id)}/messages`;
             const query = (parsed as { query?: Record<string, unknown> } | undefined)?.query;
             return transport.requestApi<T>(url, query, 'get', undefined, undefined, undefined, control);
         },
@@ -692,7 +692,7 @@ export function createOperations(transport: Transport) {
         chatSendMessage: async <T = ChatSendMessageResponse>(input: ChatSendMessageInput): Promise<T> => {
             const parsed = chatSendMessageInput.parse(input);
             const control = pickRequestControl(input);
-            const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}/messages`;
+            const url = `chats/${String((parsed as { path: Record<string, unknown> }).path.chat_id)}/messages`;
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
             return transport.requestApi<T>(url, body, 'post', undefined, undefined, undefined, control);
         },
@@ -701,7 +701,7 @@ export function createOperations(transport: Transport) {
         chatUpdateMessage: async <T = ChatUpdateMessageResponse>(input: ChatUpdateMessageInput): Promise<T> => {
             const parsed = chatUpdateMessageInput.parse(input);
             const control = pickRequestControl(input);
-            const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}/messages/${String((parsed as { path: Record<string, unknown> }).path['message'])}`;
+            const url = `chats/${String((parsed as { path: Record<string, unknown> }).path.chat_id)}/messages/${String((parsed as { path: Record<string, unknown> }).path.message)}`;
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
             const query = (parsed as { query?: Record<string, unknown> } | undefined)?.query;
             const header = (parsed as { header?: Record<string, unknown> } | undefined)?.header;
@@ -712,7 +712,7 @@ export function createOperations(transport: Transport) {
         chatSendTyping: async <T = ChatSendTypingResponse>(input: ChatSendTypingInput): Promise<T> => {
             const parsed = chatSendTypingInput.parse(input);
             const control = pickRequestControl(input);
-            const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}/typing/${String((parsed as { path: Record<string, unknown> }).path['user_id'])}`;
+            const url = `chats/${String((parsed as { path: Record<string, unknown> }).path.chat_id)}/typing/${String((parsed as { path: Record<string, unknown> }).path.user_id)}`;
             const query = (parsed as { query?: Record<string, unknown> } | undefined)?.query;
             return transport.requestApi<T>(url, undefined, 'put', undefined, query, undefined, control);
         },
@@ -721,7 +721,7 @@ export function createOperations(transport: Transport) {
         chatSetWebhook: async <T = ChatSetWebhookResponse>(input: ChatSetWebhookInput): Promise<T> => {
             const parsed = chatSetWebhookInput.parse(input);
             const control = pickRequestControl(input);
-            const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}/webhook`;
+            const url = `chats/${String((parsed as { path: Record<string, unknown> }).path.chat_id)}/webhook`;
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
             return transport.requestApi<T>(url, body, 'put', undefined, undefined, undefined, control);
         },
@@ -732,7 +732,7 @@ export function createOperations(transport: Transport) {
         ): Promise<T> => {
             const parsed = chatSetS3CredentialsInput.parse(input);
             const control = pickRequestControl(input);
-            const url = `chats/${String((parsed as { path: Record<string, unknown> }).path['chat_id'])}/s3-credentials`;
+            const url = `chats/${String((parsed as { path: Record<string, unknown> }).path.chat_id)}/s3-credentials`;
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
             return transport.requestApi<T>(url, body, 'put', undefined, undefined, undefined, control);
         },
@@ -752,7 +752,7 @@ export function createOperations(transport: Transport) {
         userShow: async <T = UserShowResponse>(input: UserShowInput): Promise<T> => {
             const parsed = userShowInput.parse(input);
             const control = pickRequestControl(input);
-            const url = `users/${String((parsed as { path: Record<string, unknown> }).path['user_id'])}`;
+            const url = `users/${String((parsed as { path: Record<string, unknown> }).path.user_id)}`;
             return transport.requestApi<T>(url, undefined, 'get', undefined, undefined, undefined, control);
         },
 
@@ -760,7 +760,7 @@ export function createOperations(transport: Transport) {
         userUpdate: async <T = UserUpdateResponse>(input: UserUpdateInput): Promise<T> => {
             const parsed = userUpdateInput.parse(input);
             const control = pickRequestControl(input);
-            const url = `users/${String((parsed as { path: Record<string, unknown> }).path['user_id'])}`;
+            const url = `users/${String((parsed as { path: Record<string, unknown> }).path.user_id)}`;
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
             const query = (parsed as { query?: Record<string, unknown> } | undefined)?.query;
             const header = (parsed as { header?: Record<string, unknown> } | undefined)?.header;
@@ -771,7 +771,7 @@ export function createOperations(transport: Transport) {
         userDelete: async <T = UserDeleteResponse>(input: UserDeleteInput): Promise<T> => {
             const parsed = userDeleteInput.parse(input);
             const control = pickRequestControl(input);
-            const url = `users/${String((parsed as { path: Record<string, unknown> }).path['user_id'])}`;
+            const url = `users/${String((parsed as { path: Record<string, unknown> }).path.user_id)}`;
             return transport.requestApi<T>(url, undefined, 'delete', undefined, undefined, undefined, control);
         },
 
@@ -779,7 +779,7 @@ export function createOperations(transport: Transport) {
         userChats: async <T = UserChatsResponse>(input: UserChatsInput): Promise<T> => {
             const parsed = userChatsInput.parse(input);
             const control = pickRequestControl(input);
-            const url = `users/${String((parsed as { path: Record<string, unknown> }).path['user_id'])}/chats`;
+            const url = `users/${String((parsed as { path: Record<string, unknown> }).path.user_id)}/chats`;
             const query = (parsed as { query?: Record<string, unknown> } | undefined)?.query;
             return transport.requestApi<T>(url, query, 'get', undefined, undefined, undefined, control);
         },
@@ -788,7 +788,7 @@ export function createOperations(transport: Transport) {
         userAddFcmToken: async <T = UserAddFcmTokenResponse>(input: UserAddFcmTokenInput): Promise<T> => {
             const parsed = userAddFcmTokenInput.parse(input);
             const control = pickRequestControl(input);
-            const url = `users/${String((parsed as { path: Record<string, unknown> }).path['user_id'])}/fcm_tokens`;
+            const url = `users/${String((parsed as { path: Record<string, unknown> }).path.user_id)}/fcm_tokens`;
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
             return transport.requestApi<T>(url, body, 'post', undefined, undefined, undefined, control);
         },

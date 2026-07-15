@@ -496,7 +496,10 @@ function emitOperationsFile(operations: CollectedOp[]): string {
         let urlExpr: string;
         if (op.pathParams.length > 0) {
             const filled = op.pathTemplate.replace(/\{([^}]+)\}/g, (_, name: string) => {
-                return `\${String((parsed as { path: Record<string, unknown> }).path[${JSON.stringify(name)}])}`;
+                // Dot access when the param name is a plain identifier (keeps Biome's useLiteralKeys happy),
+                // bracket access otherwise.
+                const access = /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name) ? `.${name}` : `[${JSON.stringify(name)}]`;
+                return `\${String((parsed as { path: Record<string, unknown> }).path${access})}`;
             });
             urlExpr = `\`${filled}\``;
         } else {

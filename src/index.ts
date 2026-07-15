@@ -78,7 +78,6 @@ import type {
     GetChatsQuery,
     GetUserChatsQuery,
     MessageButton,
-    MessageInput,
     PaginationQuery,
     Participant,
     UrlRecipient,
