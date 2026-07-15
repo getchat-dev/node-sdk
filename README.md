@@ -230,7 +230,7 @@ emby.sendMessage(
     { id: 'user_id', name: 'User Name' },  // sender (required)
     [],                                     // participants for new chats; ignored on existing chats
     'Hello world',                          // string or { text, recipient_id? }
-    { source: 'cli' },                      // optional extra metadata
+    { source: 'cli', is_service: true },    // optional extra (string | number | boolean values)
     [{ label: 'OK', action: 'ok', type: 'local' }], // optional buttons
 ).then((r) => console.log('message ids:', r.message_ids));
 ```
@@ -254,7 +254,7 @@ JSDoc shape:
  * @param {string}        [participants[].name]
  * @param {boolean}       [participants[].is_bot=false]
  * @param {string|Object} message               String text, or { text, recipient_id? }.
- * @param {Object}        [extra={}]            Extra string-map merged into the message body.
+ * @param {Object}        [extra={}]            Extra fields merged into the message body; values may be string, number or boolean.
  * @param {Object[]}      [buttons=[]]          Inline action buttons (max 4).
  * @returns {Promise<{ status: boolean, message_ids: string[] }>}
  */

@@ -2,8 +2,8 @@
 // Regenerate with `npm run generate`.
 
 import { z } from 'zod';
-import * as S from './schemas.js';
 import { pickRequestControl, type RequestControlOptions } from '../libs/requestOptions.js';
+import * as S from './schemas.js';
 
 export type HttpMethod = 'get' | 'post' | 'put' | 'delete';
 
@@ -240,7 +240,7 @@ const chatMessagesInput = z.object({
             with_users: z.union([z.literal(0), z.literal(1)]).optional(),
             isDeleted: z.union([z.literal(0), z.literal(1)]).optional(),
             isEdited: z.union([z.literal(0), z.literal(1)]).optional(),
-            extra: z.record(z.string(), z.string()).optional(),
+            extra: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
         })
         .optional(),
 });
@@ -280,7 +280,7 @@ const chatSendMessageInput = z.object({
             .array(
                 z.object({
                     text: z.string().max(4096),
-                    extra: z.record(z.string(), z.string()).optional(),
+                    extra: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
                     recipient_id: z.string().optional(),
                     buttons: z.array(S.ButtonSchema).max(4).optional(),
                     disable_notification: z.boolean().optional(),
@@ -312,7 +312,7 @@ const chatUpdateMessageInput = z.object({
             .object({
                 text: z.string().max(4096).optional(),
                 is_deleted: z.boolean().optional(),
-                extra: z.record(z.string(), z.string()).optional(),
+                extra: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
                 buttons: z.array(S.ButtonSchema).max(4).optional(),
             })
             .optional(),

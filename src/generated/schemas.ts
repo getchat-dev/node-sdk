@@ -77,7 +77,7 @@ export const MessageResourceSchema = z.object({
     is_deleted: z.boolean(),
     is_edited: z.boolean().optional(),
     versions: z.number().int().optional(),
-    extra: z.record(z.string(), z.string()).optional(),
+    extra: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
     recipient_id: z.string().optional(),
     buttons: z
         .array(

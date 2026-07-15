@@ -400,8 +400,8 @@ function emitOperationsFile(operations: CollectedOp[]): string {
     parts.push('// Regenerate with `npm run generate`.');
     parts.push('');
     parts.push("import { z } from 'zod';");
-    parts.push("import * as S from './schemas.js';");
     parts.push("import { pickRequestControl, type RequestControlOptions } from '../libs/requestOptions.js';");
+    parts.push("import * as S from './schemas.js';");
     parts.push('');
 
     // Transport interface

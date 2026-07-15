@@ -22,8 +22,15 @@ export type EditMessagesRight = 'none' | 'my' | 'any';
 export type DeleteMessagesRight = 'none' | 'my' | 'any';
 export type PinMessagesRight = 'none' | 'for_me' | 'for_everyone';
 
-// String ↔ string map used everywhere (metadata, extra).
+// String ↔ string map, used for `metadata`.
 export type StringMap = Record<string, string>;
+
+/**
+ * `extra` bags hold scalar values — the backend accepts strings, numbers and
+ * booleans (e.g. `{ is_service: true, retries: 3 }`), not only strings.
+ */
+export type ExtraValue = string | number | boolean;
+export type ExtraMap = Record<string, ExtraValue>;
 
 // ---------------------------------------------------------------------------
 // User
@@ -213,7 +220,7 @@ export interface MessageButton {
 export interface MessageInput {
     text: string;
     recipient_id?: string;
-    extra?: StringMap;
+    extra?: ExtraMap;
     buttons?: MessageButton[];
     disable_notification?: boolean;
 }
@@ -228,7 +235,7 @@ export interface MessageResource {
     is_deleted: boolean;
     is_edited?: boolean;
     versions?: number;
-    extra?: StringMap;
+    extra?: ExtraMap;
     recipient_id?: string;
     buttons?: MessageButton[];
 }
@@ -237,7 +244,7 @@ export interface MessageResource {
 export interface MessageUpdate {
     text?: string;
     is_deleted?: boolean;
-    extra?: StringMap;
+    extra?: ExtraMap;
     buttons?: MessageButton[];
 }
 
@@ -353,7 +360,7 @@ export interface GetChatMessagesQuery extends PaginationQuery {
     with_users?: boolean;
     isDeleted?: boolean;
     isEdited?: boolean;
-    extra?: StringMap;
+    extra?: ExtraMap;
 }
 
 export interface GetUserChatsQuery extends PaginationQuery {

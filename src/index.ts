@@ -73,6 +73,7 @@ import type {
     ChatCreate,
     ChatInput,
     ChatUpdate,
+    ExtraMap,
     GetChatMessagesQuery,
     GetChatsQuery,
     GetUserChatsQuery,
@@ -80,7 +81,6 @@ import type {
     MessageInput,
     PaginationQuery,
     Participant,
-    StringMap,
     UrlRecipient,
     User,
     UserRights,
@@ -144,7 +144,7 @@ export interface UrlOptions {
 export interface UpdateMessageInput {
     text?: string;
     isDeleted?: boolean;
-    extra?: StringMap;
+    extra?: ExtraMap;
     buttons?: MessageButton[];
 }
 
@@ -631,7 +631,7 @@ export class Emby {
             if (_.isFilledPlainObject(queryParams.extra)) {
                 const extraParams: Record<string, string> = {};
                 for (const key of Object.keys(queryParams.extra)) {
-                    const value = (queryParams.extra as StringMap)[key];
+                    const value = (queryParams.extra as ExtraMap)[key];
                     if (_.isScalar(value)) {
                         extraParams[key] = _.isBoolean(value, true) ? String(_.isTRUE(value)) : String(value);
                     }
@@ -662,11 +662,11 @@ export class Emby {
         user: User,
         participants: Participant[] | undefined,
         message: MessageTextInput,
-        extra: StringMap = {},
+        extra: ExtraMap = {},
         buttons: MessageButton[] = [],
     ): Promise<T> {
         // Build the message item first — text/recipient_id then extras.
-        const messageData: { text?: string; recipient_id?: string; extra?: StringMap; buttons?: MessageButton[] } = {};
+        const messageData: { text?: string; recipient_id?: string; extra?: ExtraMap; buttons?: MessageButton[] } = {};
 
         if (_.isPlainObject(message)) {
             const normalized = normalizeData(message, ['text', 'recipient_id']);
@@ -735,7 +735,7 @@ export class Emby {
         const messageBody: {
             text?: string;
             is_deleted?: boolean;
-            extra?: StringMap;
+            extra?: ExtraMap;
             buttons?: MessageButton[];
         } = {};
 

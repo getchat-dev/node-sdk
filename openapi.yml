@@ -583,7 +583,10 @@ paths:
           schema:
             type: object
             additionalProperties:
-              type: string
+              oneOf:
+                - type: string
+                - type: number
+                - type: boolean
       responses:
         '200':
           description: List of messages
@@ -684,7 +687,10 @@ paths:
                       extra:
                         type: object
                         additionalProperties:
-                          type: string
+                          oneOf:
+                            - type: string
+                            - type: number
+                            - type: boolean
                       recipient_id:
                         type: string
                       buttons:
@@ -757,7 +763,10 @@ paths:
                     extra:
                       type: object
                       additionalProperties:
-                        type: string
+                        oneOf:
+                          - type: string
+                          - type: number
+                          - type: boolean
                     buttons:
                       type: array
                       maxItems: 4
@@ -1703,7 +1712,10 @@ components:
         extra:
           type: object
           additionalProperties:
-            type: string
+            oneOf:
+              - type: string
+              - type: number
+              - type: boolean
         recipient_id:
           type: string
         buttons:

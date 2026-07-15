@@ -27,13 +27,17 @@ import type { ChatArg, Emby, MessageTextInput, UpdateMessageInput, UpdateMessage
 import type {
     ChatCreate,
     ChatUpdate,
+    ExtraMap,
+    ExtraValue,
     GetChatMessagesQuery,
     GetChatsQuery,
     GetUserChatsQuery,
     MessageButton,
+    MessageInput,
+    MessageResource,
+    MessageUpdate,
     PaginationQuery,
     Participant,
-    StringMap,
     User,
 } from '../../src/types.js';
 
@@ -65,7 +69,7 @@ export type _sigSendMessage = Expect<
             user: User,
             participants: Participant[] | undefined,
             message: MessageTextInput,
-            extra?: StringMap,
+            extra?: ExtraMap,
             buttons?: MessageButton[],
         ]
     >
@@ -308,3 +312,54 @@ export type _ctrlAccepted = Expect<
 >;
 // …and the control options are optional (bare wire input still valid).
 export type _ctrlOptional = Expect<AcceptsInput<'chatShow', { path: { chat_id: 'c1' } }>>;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// J. `extra` bags accept scalar values (string | number | boolean), not only
+//    strings — pins the fix that widened `additionalProperties` from `type: string`
+//    to a scalar union so `{ is_service: true }` type-checks instead of erroring.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type _extraValueShape = Expect<Equal<ExtraValue, string | number | boolean>>;
+export type _extraMapShape = Expect<Equal<ExtraMap, Record<string, string | number | boolean>>>;
+
+// The hand-written message types carry the widened map.
+export type _msgInputExtra = Expect<Equal<MessageInput['extra'], ExtraMap | undefined>>;
+export type _msgUpdateExtra = Expect<Equal<MessageUpdate['extra'], ExtraMap | undefined>>;
+export type _msgResourceExtra = Expect<Equal<MessageResource['extra'], ExtraMap | undefined>>;
+export type _updateMsgInputExtra = Expect<Equal<UpdateMessageInput['extra'], ExtraMap | undefined>>;
+
+// `.api.*` inputs accept number + boolean extra values, not only strings.
+export type _apiSendScalarExtra = Expect<
+    AcceptsInput<
+        'chatSendMessage',
+        {
+            path: { chat_id: 'c1' };
+            body: { user: { id: 'u1'; name: 'U' }; messages: [{ text: 'hi'; extra: { s: 'x'; n: 1; b: true } }] };
+        }
+    >
+>;
+export type _apiUpdateScalarExtra = Expect<
+    AcceptsInput<
+        'chatUpdateMessage',
+        { path: { chat_id: 'c1'; message: 'm1' }; body: { message: { extra: { s: 'x'; n: 1; b: true } } } }
+    >
+>;
+export type _apiMessagesQueryScalarExtra = Expect<
+    AcceptsInput<'chatMessages', { path: { chat_id: 'c1' }; query: { extra: { flag: true; count: 2 } } }>
+>;
+
+// A non-scalar value (object / array / null) is NOT a valid extra value.
+export type _extraRejectsObjectValue = ExpectFalse<Assignable<{ a: { nested: 1 } }, ExtraMap>>;
+export type _extraRejectsArrayValue = ExpectFalse<Assignable<{ a: number[] }, ExtraMap>>;
+export type _extraRejectsNullValue = ExpectFalse<Assignable<{ a: null }, ExtraMap>>;
+
+// …and that rejection holds at the actual `.api.*` call site.
+export type _apiSendRejectsObjectExtra = ExpectFalse<
+    AcceptsInput<
+        'chatSendMessage',
+        {
+            path: { chat_id: 'c1' };
+            body: { user: { id: 'u1'; name: 'U' }; messages: [{ text: 'hi'; extra: { bad: { x: 1 } } }] };
+        }
+    >
+>;
