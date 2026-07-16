@@ -80,6 +80,7 @@ import type {
     MessageButton,
     PaginationQuery,
     Participant,
+    ParticipantRights,
     UrlRecipient,
     User,
     UserRights,
@@ -701,6 +702,8 @@ export class Emby {
         const chatId = chatData.id as string;
         delete chatData.id;
 
+        if ('create' in chatData) chatData.create = _.isTRUE(chatData.create);
+
         if (_.isFilledPlainObject(extra)) messageData.extra = extra;
         if (_.isFilledArray(buttons)) messageData.buttons = buttons;
 
@@ -807,6 +810,7 @@ export class Emby {
             link?: string;
             picture?: string;
             is_bot?: boolean;
+            rights?: ParticipantRights;
         }>;
         return this.api.chatAddParticipants<T>({
             path: { chat_id: chatId },

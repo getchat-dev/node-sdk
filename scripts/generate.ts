@@ -105,6 +105,23 @@ function emitZod(schema: Schema, depth = 0): string {
 
     if (!schema || typeof schema !== 'object') return 'z.unknown()';
 
+    // OpenAPI min/maxProperties → Zod refinements (Zod 4 has no built-in for these).
+    // Declared up here because they can ride as siblings of `allOf` too (e.g. a
+    // `$ref` body with `minProperties: 1`), not only on inline objects.
+    const withPropCount = (expr: string): string => {
+        let out = expr;
+        if (typeof schema.minProperties === 'number') {
+            const min = schema.minProperties;
+            const noun = min === 1 ? 'property' : 'properties';
+            out += `.refine((v) => Object.keys(v as object).length >= ${min}, { message: 'at least ${min} ${noun} required' })`;
+        }
+        if (typeof schema.maxProperties === 'number') {
+            const max = schema.maxProperties;
+            out += `.refine((v) => Object.keys(v as object).length <= ${max}, { message: 'maximum ${max} properties allowed' })`;
+        }
+        return out;
+    };
+
     // oneOf / anyOf — Zod union. (We don't model `oneOf` strictness vs `anyOf` overlap;
     // Zod's `union` matches the first successful branch, which is fine for our shapes.)
     if (Array.isArray(schema.oneOf) && schema.oneOf.length > 0) {
@@ -119,9 +136,12 @@ function emitZod(schema: Schema, depth = 0): string {
     // members nest via z.intersection.
     if (Array.isArray(schema.allOf) && schema.allOf.length > 0) {
         const members = schema.allOf.map((s: Schema) => emitZod(s, depth));
-        return members.length === 1
-            ? members[0]
-            : members.reduce((a: string, b: string) => `z.intersection(${a}, ${b})`);
+        const merged =
+            members.length === 1
+                ? members[0]
+                : members.reduce((a: string, b: string) => `z.intersection(${a}, ${b})`);
+        // Sibling minProperties/maxProperties must survive the collapse.
+        return withPropCount(merged);
     }
 
     if (Array.isArray(schema.enum)) {
@@ -168,21 +188,6 @@ function emitZod(schema: Schema, depth = 0): string {
     }
 
     const hasProps = schema.properties && Object.keys(schema.properties).length > 0;
-
-    // OpenAPI min/maxProperties → Zod refinements (Zod 4 has no built-in for these)
-    const withPropCount = (expr: string): string => {
-        let out = expr;
-        if (typeof schema.minProperties === 'number') {
-            const min = schema.minProperties;
-            const noun = min === 1 ? 'property' : 'properties';
-            out += `.refine((v) => Object.keys(v as object).length >= ${min}, { message: 'at least ${min} ${noun} required' })`;
-        }
-        if (typeof schema.maxProperties === 'number') {
-            const max = schema.maxProperties;
-            out += `.refine((v) => Object.keys(v as object).length <= ${max}, { message: 'maximum ${max} properties allowed' })`;
-        }
-        return out;
-    };
 
     // Pure record (no defined properties, only additionalProperties)
     if (!hasProps && schema.additionalProperties) {

@@ -3,6 +3,29 @@
 
 import { z } from 'zod';
 
+export const ParticipantRightsSchema = z.object({
+    send_messages: z.boolean().nullable().optional(),
+    can_press_buttons: z.boolean().nullable().optional(),
+    edit_messages: z.enum(['none', 'my', 'any']).nullable().optional(),
+    delete_messages: z.enum(['none', 'my', 'any']).nullable().optional(),
+    pin_messages: z.enum(['none', 'for_me', 'for_everyone']).nullable().optional(),
+    send_typing: z.boolean().nullable().optional(),
+    send_photos: z.boolean().nullable().optional(),
+    send_voices: z.boolean().nullable().optional(),
+    send_audio: z.boolean().nullable().optional(),
+    send_documents: z.boolean().nullable().optional(),
+    send_location: z.boolean().nullable().optional(),
+    create_pool: z.boolean().nullable().optional(),
+    participate_pool: z.boolean().nullable().optional(),
+    kick_users: z.boolean().nullable().optional(),
+    track_presence: z.boolean().nullable().optional(),
+    track_read_state: z.boolean().nullable().optional(),
+    send_read_state: z.boolean().nullable().optional(),
+    react_messages: z.boolean().nullable().optional(),
+    leave_chats: z.boolean().nullable().optional(),
+});
+export type ParticipantRights = z.infer<typeof ParticipantRightsSchema>;
+
 export const ParticipantInputSchema = z.object({
     id: z.string().max(255),
     name: z.string().max(255).optional(),
@@ -10,6 +33,7 @@ export const ParticipantInputSchema = z.object({
     link: z.url().optional(),
     picture: z.string().optional(),
     is_bot: z.boolean().optional(),
+    rights: ParticipantRightsSchema.optional(),
 });
 export type ParticipantInput = z.infer<typeof ParticipantInputSchema>;
 

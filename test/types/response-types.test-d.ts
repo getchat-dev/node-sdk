@@ -48,8 +48,8 @@ type Expect<T extends true> = T;
 // emitType output shapes — the tricky branches of the response-type emitter.
 // ─────────────────────────────────────────────────────────────────────────────
 
-// $ref + nested object, all-optional envelope.
-export type _ShowEnvelope = Expect<Equal<ChatShowResponse, { status?: boolean; data?: { chat?: ChatResource } }>>;
+// $ref inside an all-optional envelope.
+export type _ShowEnvelope = Expect<Equal<ChatShowResponse, { status?: boolean; chat?: ChatResource }>>;
 
 // `additionalProperties: { $ref }` → Record<string, T>.
 export type _ListChatsMap = Expect<Equal<ChatListResponse['chats'], Record<string, ChatResource>>>;
@@ -61,9 +61,9 @@ export type _ListNextUrl = Expect<Equal<ChatListResponse['pagination']['next_pag
 // `type: array` → element[] (Array<T> and T[] are the same type).
 export type _ListSort = Expect<Equal<NonNullable<ChatListResponse['chats_sort']>, string[]>>;
 
-// `participants` inside `data` is an array of a $ref.
+// `participants` is an array of a $ref.
 export type _CreateParticipants = Expect<
-    Equal<NonNullable<NonNullable<ChatCreateResponse['data']>['participants']>[number], ParticipantResource>
+    Equal<NonNullable<ChatCreateResponse['participants']>[number], ParticipantResource>
 >;
 
 // ─────────────────────────────────────────────────────────────────────────────

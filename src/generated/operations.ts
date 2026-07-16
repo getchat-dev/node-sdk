@@ -75,7 +75,14 @@ const chatCreateInput = z.object({
                 .record(z.string(), z.string())
                 .refine((v) => Object.keys(v as object).length <= 64, { message: 'maximum 64 properties allowed' })
                 .optional(),
-            owner: S.UserSchema.optional(),
+            owner: z
+                .intersection(
+                    S.UserSchema,
+                    z.object({
+                        rights: S.ParticipantRightsSchema.optional(),
+                    }),
+                )
+                .optional(),
         }),
         participants: z.array(S.ParticipantInputSchema).max(10).optional(),
     }),
@@ -83,7 +90,8 @@ const chatCreateInput = z.object({
 export type ChatCreateInput = z.infer<typeof chatCreateInput> & RequestControlOptions;
 export type ChatCreateResponse = {
     status?: boolean;
-    data?: { chat?: S.ChatResource; participants?: Array<S.ParticipantResource> };
+    chat?: S.ChatResource;
+    participants?: Array<S.ParticipantResource>;
 };
 
 const chatShowInput = z.object({
@@ -92,7 +100,7 @@ const chatShowInput = z.object({
     }),
 });
 export type ChatShowInput = z.infer<typeof chatShowInput> & RequestControlOptions;
-export type ChatShowResponse = { status?: boolean; data?: { chat?: S.ChatResource } };
+export type ChatShowResponse = { status?: boolean; chat?: S.ChatResource };
 
 const chatUpdateInput = z.object({
     path: z.object({
@@ -119,7 +127,7 @@ const chatUpdateInput = z.object({
     }),
 });
 export type ChatUpdateInput = z.infer<typeof chatUpdateInput> & RequestControlOptions;
-export type ChatUpdateResponse = { status?: boolean; data?: { chat?: S.ChatResource } };
+export type ChatUpdateResponse = { status?: boolean; chat?: S.ChatResource };
 
 const chatDeleteInput = z.object({
     path: z.object({
@@ -161,6 +169,7 @@ const chatAddParticipantsInput = z.object({
                     link: z.url().optional(),
                     picture: z.string().optional(),
                     is_bot: z.boolean().optional(),
+                    rights: S.ParticipantRightsSchema.optional(),
                 }),
             )
             .max(100)
@@ -184,32 +193,22 @@ const chatUpdateParticipantRightsInput = z.object({
         chat_id: z.string(),
         user_id: z.string(),
     }),
-    body: z
+    query: z
         .object({
-            send_messages: z.boolean().nullable().optional(),
-            can_press_buttons: z.boolean().nullable().optional(),
-            edit_messages: z.enum(['none', 'my', 'any']).nullable().optional(),
-            delete_messages: z.enum(['none', 'my', 'any']).nullable().optional(),
-            pin_messages: z.enum(['none', 'for_me', 'for_everyone']).nullable().optional(),
-            send_typing: z.boolean().nullable().optional(),
-            send_photos: z.boolean().nullable().optional(),
-            send_voices: z.boolean().nullable().optional(),
-            send_audio: z.boolean().nullable().optional(),
-            send_documents: z.boolean().nullable().optional(),
-            send_location: z.boolean().nullable().optional(),
-            create_pool: z.boolean().nullable().optional(),
-            participate_pool: z.boolean().nullable().optional(),
-            kick_users: z.boolean().nullable().optional(),
-            track_presence: z.boolean().nullable().optional(),
-            track_read_state: z.boolean().nullable().optional(),
-            send_read_state: z.boolean().nullable().optional(),
-            react_messages: z.boolean().nullable().optional(),
-            leave_chats: z.boolean().nullable().optional(),
+            result: z.enum(['yes', 'no']).optional(),
         })
-        .refine((v) => Object.keys(v as object).length >= 1, { message: 'at least 1 property required' }),
+        .optional(),
+    header: z
+        .object({
+            Prefer: z.enum(['return=representation', 'return=minimal']).optional(),
+        })
+        .optional(),
+    body: S.ParticipantRightsSchema.refine((v) => Object.keys(v as object).length >= 1, {
+        message: 'at least 1 property required',
+    }),
 });
 export type ChatUpdateParticipantRightsInput = z.infer<typeof chatUpdateParticipantRightsInput> & RequestControlOptions;
-export type ChatUpdateParticipantRightsResponse = { status?: boolean };
+export type ChatUpdateParticipantRightsResponse = { status?: boolean; rights?: Record<string, unknown> };
 
 const chatDeleteParticipantRightsInput = z.object({
     path: z.object({
@@ -238,6 +237,7 @@ const chatMessagesInput = z.object({
             limit: z.number().int().min(1).max(1000).optional(),
             page: z.number().int().min(1).optional(),
             with_users: z.union([z.literal(0), z.literal(1)]).optional(),
+            order: z.enum(['asc', 'desc']).optional(),
             isDeleted: z.union([z.literal(0), z.literal(1)]).optional(),
             isEdited: z.union([z.literal(0), z.literal(1)]).optional(),
             extra: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
@@ -267,6 +267,7 @@ const chatSendMessageInput = z.object({
         user: S.UserSchema,
         chat: z
             .object({
+                create: z.boolean().optional(),
                 type: z.enum(['private', 'group', 'supergroup', 'channel']).optional(),
                 title: z.string().max(255).optional(),
                 metadata: z
@@ -392,7 +393,7 @@ const userCreateInput = z.object({
     }),
 });
 export type UserCreateInput = z.infer<typeof userCreateInput> & RequestControlOptions;
-export type UserCreateResponse = { status?: boolean; data?: { user?: S.UserResource } };
+export type UserCreateResponse = { status?: boolean; user?: S.UserResource };
 
 const userShowInput = z.object({
     path: z.object({
@@ -400,7 +401,7 @@ const userShowInput = z.object({
     }),
 });
 export type UserShowInput = z.infer<typeof userShowInput> & RequestControlOptions;
-export type UserShowResponse = { status?: boolean; data?: { user?: S.UserResource } };
+export type UserShowResponse = { status?: boolean; user?: S.UserResource };
 
 const userUpdateInput = z.object({
     path: z.object({
@@ -430,7 +431,7 @@ const userUpdateInput = z.object({
     }),
 });
 export type UserUpdateInput = z.infer<typeof userUpdateInput> & RequestControlOptions;
-export type UserUpdateResponse = { status?: boolean; data?: { user?: S.UserResource } };
+export type UserUpdateResponse = { status?: boolean; user?: S.UserResource };
 
 const userDeleteInput = z.object({
     path: z.object({
@@ -656,7 +657,9 @@ export function createOperations(transport: Transport) {
             const control = pickRequestControl(input);
             const url = `chats/${String((parsed as { path: Record<string, unknown> }).path.chat_id)}/participants/${String((parsed as { path: Record<string, unknown> }).path.user_id)}/rights`;
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
-            return transport.requestApi<T>(url, body, 'put', undefined, undefined, undefined, control);
+            const query = (parsed as { query?: Record<string, unknown> } | undefined)?.query;
+            const header = (parsed as { header?: Record<string, unknown> } | undefined)?.header;
+            return transport.requestApi<T>(url, body, 'put', undefined, query, header, control);
         },
 
         /** Clear all participant rights for this chat */

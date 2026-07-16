@@ -2,6 +2,12 @@
 // Sourced from openapi.yml (primitives, resources, request/response shapes)
 // and libs/rights.scheme.json (UserRights — not in openapi.yml).
 
+import type { ParticipantRights } from './generated/schemas.js';
+
+// Re-exported so consumers can type participant rights without reaching into
+// `generated/` (whose layout is an implementation detail).
+export type { ParticipantRights };
+
 // ---------------------------------------------------------------------------
 // Primitive unions & enums
 // ---------------------------------------------------------------------------
@@ -80,6 +86,13 @@ export interface Participant {
     link?: string;
     picture?: string;
     is_bot?: boolean;
+    /**
+     * Per-chat right overrides applied when the participant is attached
+     * (booleans + `edit_messages`/`delete_messages`/`pin_messages` enums —
+     * same shape as `updateParticipantRights`). Read back via
+     * `getParticipantRights`.
+     */
+    rights?: ParticipantRights;
 }
 
 /**
@@ -179,7 +192,12 @@ export interface ChatCreate {
     title: string;
     type: ChatType;
     metadata?: StringMap;
-    owner?: User;
+    /**
+     * Chat owner. The owner is attached as a participant too, so it may carry
+     * per-chat `rights` overrides (unlike rights in `participants[]`, which are
+     * ignored for the owner).
+     */
+    owner?: User & { rights?: ParticipantRights };
 }
 
 /** Input for updating a chat via PUT /chats/{chat_id}. */

@@ -179,7 +179,12 @@ paths:
                       additionalProperties:
                         type: string
                     owner:
-                      $ref: '#/components/schemas/User'
+                      allOf:
+                        - $ref: '#/components/schemas/User'
+                        - type: object
+                          properties:
+                            rights:
+                              $ref: '#/components/schemas/ParticipantRights'
                 participants:
                   type: array
                   maxItems: 10
@@ -188,11 +193,9 @@ paths:
       responses:
         '201':
           description: >-
-            Chat created successfully. `data` is empty unless the client asks
-            for the entity via `Prefer: return=representation`, in which case it
-            contains `chat`; `data.participants` is additionally included when
-            `with_participants=true` is also passed. (Legacy: `?result=yes` and
-            `?participants=yes` still work but are deprecated.)
+            Chat created. `chat` is returned only with
+            `Prefer: return=representation`; add `with_participants=true` for
+            `participants`.
           headers:
             Preference-Applied:
               $ref: '#/components/headers/PreferenceApplied'
@@ -203,19 +206,12 @@ paths:
                 properties:
                   status:
                     type: boolean
-                  data:
-                    type: object
-                    description: >-
-                      Empty by default. Populated only when representation is
-                      requested (and `with_participants=true` for the
-                      participants list).
-                    properties:
-                      chat:
-                        $ref: '#/components/schemas/ChatResource'
-                      participants:
-                        type: array
-                        items:
-                          $ref: '#/components/schemas/ParticipantResource'
+                  chat:
+                    $ref: '#/components/schemas/ChatResource'
+                  participants:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ParticipantResource'
         '409':
           description: Chat already exists
 
@@ -242,11 +238,8 @@ paths:
                 properties:
                   status:
                     type: boolean
-                  data:
-                    type: object
-                    properties:
-                      chat:
-                        $ref: '#/components/schemas/ChatResource'
+                  chat:
+                    $ref: '#/components/schemas/ChatResource'
 
     put:
       summary: Update chat
@@ -279,9 +272,8 @@ paths:
       responses:
         '200':
           description: >-
-            Chat updated. `data` is empty unless the client asks for the entity
-            via `Prefer: return=representation`, in which case it contains the
-            updated `chat`. (Legacy `?result=yes` still works but is deprecated.)
+            Chat updated. `chat` is returned only with
+            `Prefer: return=representation`.
           headers:
             Preference-Applied:
               $ref: '#/components/headers/PreferenceApplied'
@@ -292,14 +284,8 @@ paths:
                 properties:
                   status:
                     type: boolean
-                  data:
-                    type: object
-                    description: >-
-                      Empty by default. Populated only when representation is
-                      requested.
-                    properties:
-                      chat:
-                        $ref: '#/components/schemas/ChatResource'
+                  chat:
+                    $ref: '#/components/schemas/ChatResource'
 
     delete:
       summary: Delete chat
@@ -399,6 +385,8 @@ paths:
                         type: string
                       is_bot:
                         type: boolean
+                      rights:
+                        $ref: '#/components/schemas/ParticipantRights'
       responses:
         '200':
           description: Participants added
@@ -417,6 +405,9 @@ paths:
       operationId: chat.updateParticipantRights
       tags:
         - Chat Participants
+      parameters:
+        - $ref: '#/components/parameters/preferReturnParam'
+        - $ref: '#/components/parameters/resultParam'
       description: >-
         Override this participant's rights for this chat only. Every right is
         optional; a value present sets the override, **fully replacing** the
@@ -437,34 +428,18 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              allOf:
+                - $ref: '#/components/schemas/ParticipantRights'
               minProperties: 1
-              description: >-
-                Per-chat right overrides. Booleans accept `true`/`false`/`null`;
-                each key may be omitted. Mirrors the signed-link rights schema.
-              properties:
-                send_messages: { type: boolean, nullable: true }
-                can_press_buttons: { type: boolean, nullable: true }
-                edit_messages: { type: string, nullable: true, enum: [none, my, any] }
-                delete_messages: { type: string, nullable: true, enum: [none, my, any] }
-                pin_messages: { type: string, nullable: true, enum: [none, for_me, for_everyone] }
-                send_typing: { type: boolean, nullable: true }
-                send_photos: { type: boolean, nullable: true }
-                send_voices: { type: boolean, nullable: true }
-                send_audio: { type: boolean, nullable: true }
-                send_documents: { type: boolean, nullable: true }
-                send_location: { type: boolean, nullable: true }
-                create_pool: { type: boolean, nullable: true }
-                participate_pool: { type: boolean, nullable: true }
-                kick_users: { type: boolean, nullable: true }
-                track_presence: { type: boolean, nullable: true }
-                track_read_state: { type: boolean, nullable: true }
-                send_read_state: { type: boolean, nullable: true }
-                react_messages: { type: boolean, nullable: true }
-                leave_chats: { type: boolean, nullable: true }
+              description: At least one right must be provided.
       responses:
         '200':
-          description: Participant updated
+          description: >-
+            Rights updated. `rights` (the full resulting override map) is
+            returned only with `Prefer: return=representation`.
+          headers:
+            Preference-Applied:
+              $ref: '#/components/headers/PreferenceApplied'
           content:
             application/json:
               schema:
@@ -472,6 +447,10 @@ paths:
                 properties:
                   status:
                     type: boolean
+                  rights:
+                    type: object
+                    description: Resulting per-chat overrides; `{}` when none. Same shape as GET.
+                    additionalProperties: true
         '404':
           description: User not found in chat
         '422':
@@ -561,23 +540,49 @@ paths:
           schema:
             type: integer
             enum: [0, 1]
+        - name: order
+          in: query
+          description: Sort messages by `seq`. `asc` (default) or `desc`.
+          required: false
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: asc
         - name: isDeleted
           in: query
-          description: Filter deleted messages (1 = yes, 0 = no — backend wants integer wire value)
+          description: >-
+            `1` — only deleted messages, `0` — only not deleted. Omit to get
+            both. Pass an integer, not `true`/`false`.
           required: false
           schema:
             type: integer
             enum: [0, 1]
         - name: isEdited
           in: query
-          description: Filter edited messages (1 = yes, 0 = no — backend wants integer wire value)
+          description: >-
+            `1` — only edited messages, `0` — only never edited. Omit to get
+            both. Pass an integer, not `true`/`false`.
           required: false
           schema:
             type: integer
             enum: [0, 1]
         - name: extra
           in: query
-          description: Filter by message extra fields
+          description: >-
+            Filter by `extra` fields, e.g. `extra[is_service]=1`.
+
+            - `null` finds messages where the field is empty or missing.
+
+            - `1`/`true`/`yes`/`on` finds messages where the field is `true`.
+
+            - `0`/`false`/`no`/`off` finds everything that is not `true` —
+              including messages without the field. So `extra[is_service]=0`
+              returns all non-service messages, even ones that never had
+              `is_service` set.
+
+            - Anything else is matched as-is.
+
+            One value per key (arrays aren't supported yet).
           required: false
           style: deepObject
           schema:
@@ -655,6 +660,15 @@ paths:
                 chat:
                   type: object
                   properties:
+                    create:
+                      type: boolean
+                      default: false
+                      description: >-
+                        Create the chat when it doesn't exist yet (the chat
+                        fields then follow the chat.create rules; `owner`
+                        defaults to the sending `user`). Without this flag a
+                        send into an unknown chat is a 404
+                        ("Can't find chat resource").
                     type:
                       type: string
                       enum: [private, group, supergroup, channel]
@@ -727,6 +741,10 @@ paths:
                     type: boolean
                   message:
                     type: string
+        '404':
+          description: >-
+            Chat does not exist and `chat.create` was not set — the backend
+            answers `{"status": false, "error": "Can't find chat resource"}`.
 
   /chats/{chat_id}/messages/{message}:
     parameters:
@@ -953,9 +971,8 @@ paths:
       responses:
         '201':
           description: >-
-            User created. `data` is empty unless the client asks for the entity
-            via `Prefer: return=representation`, in which case it contains the
-            created `user`. (Legacy `?result=yes` still works but is deprecated.)
+            User created. `user` is returned only with
+            `Prefer: return=representation`.
           headers:
             Preference-Applied:
               $ref: '#/components/headers/PreferenceApplied'
@@ -966,14 +983,8 @@ paths:
                 properties:
                   status:
                     type: boolean
-                  data:
-                    type: object
-                    description: >-
-                      Empty by default. Populated only when representation is
-                      requested.
-                    properties:
-                      user:
-                        $ref: '#/components/schemas/UserResource'
+                  user:
+                    $ref: '#/components/schemas/UserResource'
         '409':
           description: User already exists
 
@@ -1000,11 +1011,8 @@ paths:
                 properties:
                   status:
                     type: boolean
-                  data:
-                    type: object
-                    properties:
-                      user:
-                        $ref: '#/components/schemas/UserResource'
+                  user:
+                    $ref: '#/components/schemas/UserResource'
 
     put:
       summary: Update user
@@ -1046,9 +1054,8 @@ paths:
       responses:
         '200':
           description: >-
-            User updated. `data` is empty unless the client asks for the entity
-            via `Prefer: return=representation`, in which case it contains the
-            updated `user`. (Legacy `?result=yes` still works but is deprecated.)
+            User updated. `user` is returned only with
+            `Prefer: return=representation`.
           headers:
             Preference-Applied:
               $ref: '#/components/headers/PreferenceApplied'
@@ -1059,14 +1066,8 @@ paths:
                 properties:
                   status:
                     type: boolean
-                  data:
-                    type: object
-                    description: >-
-                      Empty by default. Populated only when representation is
-                      requested.
-                    properties:
-                      user:
-                        $ref: '#/components/schemas/UserResource'
+                  user:
+                    $ref: '#/components/schemas/UserResource'
 
     delete:
       summary: Delete user
@@ -1487,6 +1488,32 @@ paths:
 
 components:
   schemas:
+    ParticipantRights:
+      type: object
+      description: >-
+        Per-chat right overrides. Each key optional; booleans accept
+        `true`/`false`/`null`. Mirrors the signed-link rights schema.
+      properties:
+        send_messages: { type: boolean, nullable: true }
+        can_press_buttons: { type: boolean, nullable: true }
+        edit_messages: { type: string, nullable: true, enum: [none, my, any] }
+        delete_messages: { type: string, nullable: true, enum: [none, my, any] }
+        pin_messages: { type: string, nullable: true, enum: [none, for_me, for_everyone] }
+        send_typing: { type: boolean, nullable: true }
+        send_photos: { type: boolean, nullable: true }
+        send_voices: { type: boolean, nullable: true }
+        send_audio: { type: boolean, nullable: true }
+        send_documents: { type: boolean, nullable: true }
+        send_location: { type: boolean, nullable: true }
+        create_pool: { type: boolean, nullable: true }
+        participate_pool: { type: boolean, nullable: true }
+        kick_users: { type: boolean, nullable: true }
+        track_presence: { type: boolean, nullable: true }
+        track_read_state: { type: boolean, nullable: true }
+        send_read_state: { type: boolean, nullable: true }
+        react_messages: { type: boolean, nullable: true }
+        leave_chats: { type: boolean, nullable: true }
+
     ParticipantInput:
       description: |
         Participant payload for chat creation / addParticipants / sendMessage.
@@ -1512,6 +1539,8 @@ components:
           type: string
         is_bot:
           type: boolean
+        rights:
+          $ref: '#/components/schemas/ParticipantRights'
 
     Button:
       description: Inline action button attached to a message.
@@ -1771,10 +1800,9 @@ components:
       in: header
       required: false
       description: >-
-        RFC 7240 preference controlling whether the affected entity is echoed in
-        the response body. `return=representation` includes the entity under
-        `data`; `return=minimal` (the default) returns only `status`. When
-        representation is applied the response carries a
+        RFC 7240 preference for echoing the affected entity in the response.
+        `return=representation` includes it; `return=minimal` (default) returns
+        only `status`. When honored, the response adds a
         `Preference-Applied: return=representation` header.
       schema:
         type: string
@@ -1785,9 +1813,8 @@ components:
       in: query
       required: false
       description: >-
-        Include the created participants under `data.participants`. Only takes
-        effect when the entity itself is returned (i.e. together with
-        `Prefer: return=representation`).
+        Also include the created `participants`. Only with
+        `Prefer: return=representation`.
       schema:
         type: boolean
         default: false
@@ -1798,10 +1825,9 @@ components:
       required: false
       deprecated: true
       description: >-
-        DEPRECATED — use the `Prefer: return=representation` header instead.
-        Legacy flag: pass `yes` to include the affected entity in the response
-        `data`. Still honored during the migration window; usage is logged
-        server-side.
+        DEPRECATED — use `Prefer: return=representation` instead. Legacy flag:
+        `yes` includes the affected entity in the response. Still honored;
+        usage is logged server-side.
       schema:
         type: string
         enum: [yes, no]
@@ -1813,10 +1839,9 @@ components:
       required: false
       deprecated: true
       description: >-
-        DEPRECATED — use the `with_participants` query parameter instead.
-        Legacy flag: pass `yes` (together with `result=yes`) to include the
-        created participants in `data.participants`. Still honored during the
-        migration window; usage is logged server-side.
+        DEPRECATED — use `with_participants` instead. Legacy flag: `yes` (with
+        `result=yes`) includes the created participants. Still honored; usage
+        is logged server-side.
       schema:
         type: string
         enum: [yes, no]

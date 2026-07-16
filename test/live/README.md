@@ -60,6 +60,8 @@ node --test --env-file=.env --import tsx test/live/happy-path.test.ts
 | `happy-path.test.ts` | the 10-step lifecycle: user→chats (all 4 types)→participants→messages (authored / stranger / recipient_id) →edit→delete→remove participant→user.chats |
 | `wire-format.test.ts` | A/B probes for 5 openapi↔code disputes (with_owners, with_users/withUsers, isDeleted/isEdited, typing endpoint shape, is_deleted true vs '1') |
 | `edge-cases.test.ts` | adversarial inputs: duplicates, 404s, length/maxItems/maxProperties boundaries, unicode/emoji/path-traversal, auth failures, pagination, idempotency |
+| `participant-rights.test.ts` | PUT/GET/DELETE rights round-trip: set → read → flip → null-clear → delete-all, plus mute enforcement on the send API |
+| `rights-entry-points.test.ts` | rights arriving via `createChat` / `addParticipantsToChat` / `sendMessage` participants: cross-contamination, `{}`/null rights, conflicting duplicates, owner self-mute, re-add upsert-or-ignore, sender self-mute, `chat.create` contract |
 
 ## Interpreting results
 

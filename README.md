@@ -390,7 +390,7 @@ await emby.createUser({
 #### `getUser(userId)`
 ```ts
 const r = await emby.getUser('user_id');
-console.log(r.data.user);
+console.log(r.user);
 ```
 
 #### `updateUser(userId, updates)`

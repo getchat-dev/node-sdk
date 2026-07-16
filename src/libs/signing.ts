@@ -145,6 +145,10 @@ export const normalizeParticipant = (participant: unknown): Record<string, unkno
         link: null,
         picture: null,
         is_bot: { default: false },
+        // Per-chat right overrides (REST-only field; the URL-signing flows use their
+        // own inline whitelists and never pick this up). Passed through as-is — the
+        // generated ParticipantRights Zod schema validates the shape downstream.
+        rights: null,
     });
 
 export const packObjectForSignature = (obj: Record<string, unknown>, key = ''): string[] => {

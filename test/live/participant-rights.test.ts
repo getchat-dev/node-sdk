@@ -4,10 +4,10 @@
  * override, read it back, flip it, read again, then clear it with `null` — mixing
  * the two calls to check each change actually lands on the backend.
  *
- * Strong invariants (a set value round-trips; flipping it changes the read value)
- * are asserted; backend-defined semantics (merge-vs-replace across calls, what
- * `null` does) are recorded via `t.diagnostic` rather than hard-asserted — the
- * exact behavior is what this probe surfaces.
+ * Everything with a definable expectation is hard-asserted, including contracts
+ * pinned from observed backend behavior (PUT merges: omitted keys survive; `null`
+ * removes exactly its key). A deliberate backend policy change should update the
+ * pins here — a silent one must turn the suite red.
  *
  * Requires a non-production tenant (EMBY_BASE_URL + EMBY_API_TOKEN in .env);
  * skips itself otherwise. `tenant.clearData({ sync: true })` runs before + after.
@@ -115,13 +115,10 @@ describe('live: participant rights (get/update round-trip)', { skip: SKIP_REASON
             String(mutedValue),
             'send_messages did not change on the false→true update',
         );
-        // Whether an omitted key keeps its prior override (merge) or is reset (replace)
-        // is backend-defined — record it, don't assert.
-        t.diagnostic(
-            'pin_messages' in rights
-                ? `pin_messages persisted (${JSON.stringify(rights.pin_messages)}) → merge semantics`
-                : 'pin_messages absent → replace semantics',
-        );
+        // Pinned contract (observed): PUT merges — a key the update does not mention
+        // keeps its prior override. A silent switch to replace semantics would
+        // wipe rights behind callers' backs, so it must turn this test red.
+        assert.ok('pin_messages' in rights, 'an omitted key was wiped by the PUT — merge semantics broken');
     });
 
     test('unmuting (send_messages: true) lets the member send again', async () => {
@@ -142,13 +139,11 @@ describe('live: participant rights (get/update round-trip)', { skip: SKIP_REASON
         const got = await sdk.getParticipantRights(chatId, memberId);
         const rights = (got.rights ?? {}) as Record<string, unknown>;
         t.diagnostic(`rights after null-clear of send_messages: ${JSON.stringify(rights)}`);
-        // null semantics (drop the key / store null / revert to link value) are
-        // backend-defined — surface the outcome instead of asserting one shape.
-        t.diagnostic(
-            'send_messages' in rights
-                ? `send_messages still present as ${JSON.stringify(rights.send_messages)} — null stored, not dropped`
-                : 'send_messages key removed — null clears the override',
-        );
+        // Pinned contract (observed): `null` removes exactly that key — a stored
+        // null would read back as a falsy override, and clearing MORE than the
+        // nulled key would be data loss. Both must turn this test red.
+        assert.ok(!('send_messages' in rights), `null did not clear the override: ${JSON.stringify(rights)}`);
+        assert.ok('pin_messages' in rights, 'null-clear of one key wiped an unrelated key');
     });
 
     test('delete clears all overrides at once', async (t) => {
