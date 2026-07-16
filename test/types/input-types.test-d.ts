@@ -81,7 +81,9 @@ export type _sigUpdateMessage = Expect<
     >
 >;
 export type _sigDeleteMessage = Expect<Equal<Parameters<Emby['deleteMessage']>, [chatId: string, messageId: string]>>;
-export type _sigSendTyping = Expect<Equal<Parameters<Emby['sendTyping']>, [chatId: string, userId: string]>>;
+export type _sigSendTyping = Expect<
+    Equal<Parameters<Emby['sendTyping']>, [chatId: string, userId: string, time?: number]>
+>;
 export type _sigAddParticipants = Expect<
     Equal<Parameters<Emby['addParticipantsToChat']>, [chatId: string, participants?: Participant[]]>
 >;

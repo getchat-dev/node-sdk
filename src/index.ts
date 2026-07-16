@@ -778,9 +778,17 @@ export class Emby {
      * OpenAPI spec, which is what the backend actually accepts. The previous shape
      * (`PUT /chats/{chat_id}/typing` with `{ user: userId }` body) is no longer used.
      * Verified live; legacy URL silently failed.
+     *
+     * @param time  Optional: how long (in seconds, 1–60) recipients keep showing the
+     *              indicator before it auto-hides. Sent as a URL query param per the
+     *              spec; omit to use the client default (5s).
      */
-    sendTyping<T = ChatSendTypingResponse>(chatId: string, userId: string): Promise<T> {
-        return this.api.chatSendTyping<T>({ path: { chat_id: chatId, user_id: userId } });
+    sendTyping<T = ChatSendTypingResponse>(chatId: string, userId: string, time?: number): Promise<T> {
+        return this.api.chatSendTyping<T>({
+            path: { chat_id: chatId, user_id: userId },
+            // Only send `time` when given — `{ time: undefined }` would serialize as `?time=`.
+            ...(time !== undefined ? { query: { time } } : {}),
+        });
     }
 
     addParticipantsToChat<T = ChatAddParticipantsResponse>(
