@@ -137,9 +137,7 @@ function emitZod(schema: Schema, depth = 0): string {
     if (Array.isArray(schema.allOf) && schema.allOf.length > 0) {
         const members = schema.allOf.map((s: Schema) => emitZod(s, depth));
         const merged =
-            members.length === 1
-                ? members[0]
-                : members.reduce((a: string, b: string) => `z.intersection(${a}, ${b})`);
+            members.length === 1 ? members[0] : members.reduce((a: string, b: string) => `z.intersection(${a}, ${b})`);
         // Sibling minProperties/maxProperties must survive the collapse.
         return withPropCount(merged);
     }

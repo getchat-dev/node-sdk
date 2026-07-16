@@ -96,7 +96,7 @@ describe('per-call cancellation & overrides', () => {
             timeout: 5000,
         });
         // The JSON body must carry only `chat`, never signal/timeout.
-        assert.deepEqual(server.lastRequest?.body, { chat: { id: 'c1', title: 'T', type: 'group' } });
-        assert.equal((server.lastRequest?.body as Record<string, unknown>).signal, undefined);
+        assert.deepEqual(server.lastRequest!.body, { chat: { id: 'c1', title: 'T', type: 'group' } });
+        assert.equal((server.lastRequest!.body as Record<string, unknown>).signal, undefined);
     });
 });
