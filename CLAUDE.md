@@ -205,4 +205,4 @@ If a live test reveals openapi.yml diverges from what the backend actually accep
 ## Working style
 
 - **Answers, explanations, and commit/PR descriptions: short and plain.** Say the point in everyday words — no officialese, no jargon that isn't earning its place. A sentence usually beats a dense term or a big table.
-- **Commit messages: Conventional Commits, terse.** No `Co-Authored-By` or authorship trailer. Add a body only when the subject line genuinely can't carry the point; when you do, write it for the person *using* the SDK — what changes for them — not a list of files or internals.
+- **Commit messages: Conventional Commits, terse.** No `Co-Authored-By` or authorship trailer. Add a body only when the subject line genuinely can't carry the point. When you do, open with *why* — the reason the work was done at all (a bug, a drift from the backend, a missing capability); the "what" is already in the diff. Then say what changes for the person *using* the SDK. Never a list of files or internals.

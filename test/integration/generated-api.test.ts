@@ -47,8 +47,10 @@ describe('generated .api.* (openapi-driven, Zod-validated)', () => {
             );
         });
 
-        test('Zod rejects limit above max', async () => {
-            await assert.rejects(sdk.api.chatList({ query: { limit: 9999 } }), (e) => e instanceof ZodError);
+        test('Zod rejects limit below min (1)', async () => {
+            // The spec dropped the upper bound (the backend silently clamps large
+            // limits), so only the lower bound `minimum: 1` is enforced client-side.
+            await assert.rejects(sdk.api.chatList({ query: { limit: 0 } }), (e) => e instanceof ZodError);
         });
     });
 
@@ -98,7 +100,8 @@ describe('generated .api.* (openapi-driven, Zod-validated)', () => {
             );
         });
 
-        test('Zod rejects missing required body.messages[].text', async () => {
+        test('Zod rejects a message with neither text nor voice_url', async () => {
+            // The item requires text OR voice_url (anyOf); an empty {} satisfies neither.
             await assert.rejects(
                 sdk.api.chatSendMessage({
                     path: { chat_id: 'c1' },
@@ -109,6 +112,19 @@ describe('generated .api.* (openapi-driven, Zod-validated)', () => {
                 }),
                 (e) => e instanceof ZodError,
             );
+        });
+
+        test('a voice-only message (no text) is accepted', async () => {
+            server.respondWith({ status: 200, body: { status: true, message_ids: ['m1'] } });
+            await sdk.api.chatSendMessage({
+                path: { chat_id: 'c1' },
+                body: {
+                    user: { id: 'u1', name: 'U' },
+                    messages: [{ voice_url: 'https://cdn.example.com/v.ogg' }],
+                },
+            });
+            const body = server.lastRequest!.body as JsonBody;
+            assert.deepEqual(body.messages, [{ voice_url: 'https://cdn.example.com/v.ogg' }]);
         });
     });
 
@@ -275,10 +291,29 @@ describe('generated .api.* (openapi-driven, Zod-validated)', () => {
         });
     });
 
+    describe('chatSetWebhook', () => {
+        test('Zod rejects a body with neither disabled nor url', async () => {
+            // anyOf: [{required:[disabled]}, {required:[url]}] — an empty {} satisfies neither.
+            await assert.rejects(
+                sdk.api.chatSetWebhook({ path: { chat_id: 'c1' }, body: {} as { url: string } }),
+                (e) => e instanceof ZodError,
+            );
+        });
+
+        test('PUT /chats/{chat_id}/webhook with disabled only is accepted', async () => {
+            server.respondWith({ status: 200, body: { status: true } });
+            await sdk.api.chatSetWebhook({ path: { chat_id: 'c1' }, body: { disabled: true } });
+            const req = server.lastRequest!;
+            assert.equal(req.method, 'PUT');
+            assert.equal(req.path, '/api/v1/chats/c1/webhook');
+            assert.deepEqual(req.body, { disabled: true });
+        });
+    });
+
     describe('surface', () => {
-        test('.api exposes all 30 operationIds', () => {
+        test('.api exposes all 31 operationIds', () => {
             const names = Object.keys(sdk.api).sort();
-            assert.equal(names.length, 30);
+            assert.equal(names.length, 31);
             for (const expected of [
                 'chatList',
                 'chatCreate',
@@ -309,6 +344,7 @@ describe('generated .api.* (openapi-driven, Zod-validated)', () => {
                 'tenantSetFirebaseServiceAccount',
                 'tenantSetFirebaseFcmVapid',
                 'tenantSetPushNotificationsSettings',
+                'tenantSetParticipantsListingSettings',
                 'tenantClearData',
             ]) {
                 assert.ok(names.includes(expected), `missing ${expected}`);

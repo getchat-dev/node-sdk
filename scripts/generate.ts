@@ -122,12 +122,48 @@ function emitZod(schema: Schema, depth = 0): string {
         return out;
     };
 
+    // A base object (`type: object`/`properties`) can carry an `anyOf`/`oneOf` whose
+    // members are pure `{ required: [...] }` groups — the JSON Schema idiom for "at
+    // least one of these fields" (e.g. sendMessage's `text` OR `voice_url`, webhook's
+    // `disabled` OR `url`). Naively unioning those members throws away the sibling
+    // `properties`, so detect the pattern and fall through to the object branch, which
+    // emits the real object plus a `.refine()` for the required-groups constraint.
+    // The refine checks `!= null` rather than key-presence on purpose: a nullable
+    // field left explicitly `null` must not satisfy its own group (mirrors the
+    // backend's "required unless the other is set" rule). Don't relax it to `k in v`.
+    const hasBaseObject =
+        schema.type === 'object' || !!(schema.properties && Object.keys(schema.properties).length > 0);
+    const requiredGroups = (): string[][] | null => {
+        const members = schema.anyOf ?? schema.oneOf;
+        if (!Array.isArray(members) || members.length === 0) return null;
+        const isPureRequired = (m: Schema): boolean =>
+            !!m &&
+            typeof m === 'object' &&
+            Array.isArray(m.required) &&
+            !m.type &&
+            !m.properties &&
+            !m.$ref &&
+            !m.allOf &&
+            !m.anyOf &&
+            !m.oneOf &&
+            !m.enum;
+        return members.every(isPureRequired) ? members.map((m: Schema) => m.required as string[]) : null;
+    };
+    const withRequiredGroups = (expr: string): string => {
+        if (!hasBaseObject) return expr;
+        const groups = requiredGroups();
+        if (!groups) return expr;
+        const msg = `one of these key groups is required: ${groups.map((g) => g.join('+')).join(' | ')}`;
+        return `${expr}.refine((v) => ${JSON.stringify(groups)}.some((g) => g.every((k) => (v as Record<string, unknown>)[k] != null)), { message: ${JSON.stringify(msg)} })`;
+    };
+
     // oneOf / anyOf — Zod union. (We don't model `oneOf` strictness vs `anyOf` overlap;
     // Zod's `union` matches the first successful branch, which is fine for our shapes.)
-    if (Array.isArray(schema.oneOf) && schema.oneOf.length > 0) {
+    // Skipped when the members are required-groups on a base object (handled above).
+    if (Array.isArray(schema.oneOf) && schema.oneOf.length > 0 && !(hasBaseObject && requiredGroups())) {
         return `z.union([${schema.oneOf.map((s: Schema) => emitZod(s, depth)).join(', ')}])`;
     }
-    if (Array.isArray(schema.anyOf) && schema.anyOf.length > 0) {
+    if (Array.isArray(schema.anyOf) && schema.anyOf.length > 0 && !(hasBaseObject && requiredGroups())) {
         return `z.union([${schema.anyOf.map((s: Schema) => emitZod(s, depth)).join(', ')}])`;
     }
 
@@ -210,7 +246,7 @@ function emitZod(schema: Schema, depth = 0): string {
                 schema.additionalProperties === true ? 'z.unknown()' : emitZod(schema.additionalProperties, depth);
             obj += `.catchall(${valueSchema})`;
         }
-        return withPropCount(obj);
+        return withRequiredGroups(withPropCount(obj));
     }
 
     return 'z.unknown()';

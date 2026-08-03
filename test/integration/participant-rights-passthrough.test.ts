@@ -28,7 +28,7 @@ describe('participant `rights` pass-through', () => {
     test('createChat forwards participants[].rights; bare participants stay bare', async () => {
         server.respondWith({ status: 201, body: { status: true } });
 
-        await sdk.createChat({ id: 'c1', title: 'G', type: 'group' }, [
+        await sdk.createChat({ id: 'c1', title: 'G', type: 'group', owner: { id: 'o1', name: 'Owner' } }, [
             { id: 'u1', name: 'U1', rights: { send_messages: false, edit_messages: 'my' } },
             { id: 'u2', name: 'U2' },
         ]);

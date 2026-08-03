@@ -31,11 +31,13 @@ describe('Emby chat CRUD wrappers', () => {
 
         test('POST /chats with body.chat', async () => {
             server.respondWith({ status: 201, body: { status: true, data: { chat: { id: 'c1' } } } });
-            await sdk.createChat({ id: 'c1', title: 'Group', type: 'group' });
+            await sdk.createChat({ id: 'c1', title: 'Group', type: 'group', owner: { id: 'o1', name: 'Owner' } });
             const req = server.lastRequest!;
             assert.equal(req.method, 'POST');
             assert.equal(req.path, '/api/v1/chats');
-            assert.deepEqual(req.body, { chat: { id: 'c1', title: 'Group', type: 'group' } });
+            assert.deepEqual(req.body, {
+                chat: { id: 'c1', title: 'Group', type: 'group', owner: { id: 'o1', name: 'Owner' } },
+            });
         });
 
         test('private chat: passes participants through normalization', async () => {
@@ -55,7 +57,7 @@ describe('Emby chat CRUD wrappers', () => {
 
         test('participants field omitted when none provided', async () => {
             server.respondWith({ status: 201, body: { status: true } });
-            await sdk.createChat({ id: 'c1', title: 'T', type: 'group' });
+            await sdk.createChat({ id: 'c1', title: 'T', type: 'group', owner: { id: 'o1', name: 'Owner' } });
             const body = server.lastRequest!.body as JsonBody;
             assert.equal('participants' in body, false);
         });
@@ -63,7 +65,7 @@ describe('Emby chat CRUD wrappers', () => {
         test('409 conflict bubbles up', async () => {
             server.respondWith({ status: 409, body: { message: 'exists' } });
             await assert.rejects(
-                sdk.createChat({ id: 'c1', title: 'T', type: 'group' }),
+                sdk.createChat({ id: 'c1', title: 'T', type: 'group', owner: { id: 'o1', name: 'Owner' } }),
                 (e) => (e as HttpErr).status === 409,
             );
         });

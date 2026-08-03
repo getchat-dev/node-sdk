@@ -43,7 +43,7 @@ describe('request retry', () => {
     test('POST does NOT retry a 5xx (the write may have taken effect)', async () => {
         server.respondWith({ status: 503, body: { error: 'x' } });
         await assert.rejects(
-            sdk().createChat({ id: 'c1', title: 'T', type: 'group' }),
+            sdk().createChat({ id: 'c1', title: 'T', type: 'group', owner: { id: 'o1', name: 'Owner' } }),
             (e) => (e as HttpErr).status === 503,
         );
         assert.equal(server.requests.length, 1);
@@ -52,7 +52,7 @@ describe('request retry', () => {
     test('POST retries a 429 (rate-limited, not run)', async () => {
         server.respondWith({ status: 429, body: { error: 'slow down' } });
         server.respondWith({ status: 201, body: { status: true } });
-        await sdk().createChat({ id: 'c1', title: 'T', type: 'group' });
+        await sdk().createChat({ id: 'c1', title: 'T', type: 'group', owner: { id: 'o1', name: 'Owner' } });
         assert.equal(server.requests.length, 2);
     });
 
@@ -91,7 +91,12 @@ describe('request retry', () => {
         server.respondWith({ status: 201, body: { ok: true }, delayMs: 120 });
         server.respondWith({ status: 201, body: { ok: true }, delayMs: 120 }); // must never be consumed
         await assert.rejects(
-            sdk({ timeout: 40, retries: 2 }).createChat({ id: 'c1', title: 'T', type: 'group' }),
+            sdk({ timeout: 40, retries: 2 }).createChat({
+                id: 'c1',
+                title: 'T',
+                type: 'group',
+                owner: { id: 'o1', name: 'Owner' },
+            }),
             (e) => e instanceof TimeoutError,
         );
         await new Promise((r) => setTimeout(r, 60)); // catch a stray duplicate write, if any

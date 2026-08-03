@@ -205,23 +205,23 @@ describe('live: edge cases', { skip: SKIP_REASON }, () => {
             return m;
         };
 
-        test('chatCreate with 64 metadata keys (max) is accepted', async () => {
-            const id = uid('meta64');
+        test('chatCreate with 100 metadata keys (max) is accepted', async () => {
+            const id = uid('meta100');
             await sdk.api.chatCreate({
                 body: {
                     chat: {
                         id,
                         title: 'meta boundary',
                         type: 'group',
-                        metadata: mkMeta(64),
+                        metadata: mkMeta(100),
                         owner: { id: ownerId, name: 'EdgeOwner' },
                     },
                 },
             });
         });
 
-        test('chatCreate with 65 metadata keys rejected', async () => {
-            const id = uid('meta65');
+        test('chatCreate with 101 metadata keys rejected', async () => {
+            const id = uid('meta101');
             await assert.rejects(
                 sdk.api.chatCreate({
                     body: {
@@ -229,7 +229,7 @@ describe('live: edge cases', { skip: SKIP_REASON }, () => {
                             id,
                             title: 'meta over',
                             type: 'group',
-                            metadata: mkMeta(65),
+                            metadata: mkMeta(101),
                             owner: { id: ownerId, name: 'EdgeOwner' },
                         },
                     },
@@ -327,8 +327,16 @@ describe('live: edge cases', { skip: SKIP_REASON }, () => {
 
     // ── Pagination boundaries ─────────────────────────────────────────────
     describe('pagination', () => {
-        test('limit=1001 (above max) rejected by Zod', async () => {
-            await assert.rejects(sdk.api.chatList({ query: { limit: 1001 } }));
+        test('limit above the ceiling is accepted and clamped by the backend (not rejected)', async (t) => {
+            // The spec dropped the upper bound: the backend silently clamps large
+            // limits to its 1000 ceiling instead of 422-ing. `items_per_page` echoes
+            // the effective (clamped) page size.
+            const r = await sdk.api.chatList<{ pagination?: { items_per_page?: number } }>({
+                query: { limit: 5000 },
+            });
+            const eff = r.pagination?.items_per_page;
+            t.diagnostic(`limit=5000 → items_per_page=${eff}`);
+            assert.ok(typeof eff === 'number' && eff <= 1000, `expected clamp to <= 1000, got ${eff}`);
         });
 
         test('limit=0 (below min) rejected by Zod', async () => {

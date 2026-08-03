@@ -641,11 +641,14 @@ export class Emby {
                 }
             }
 
+            // isDeleted/isEdited ride the wire as the string '1'/'0' (spec type is
+            // string — the backend reads them with a lenient truthy filter, unlike
+            // with_users which wants an integer). The query string is identical either way.
             if (_.isBoolean(queryParams.isDeleted, true)) {
-                query.isDeleted = Number(_.isTRUE(queryParams.isDeleted)) as 0 | 1;
+                query.isDeleted = _.isTRUE(queryParams.isDeleted) ? '1' : '0';
             }
             if (_.isBoolean(queryParams.isEdited, true)) {
-                query.isEdited = Number(_.isTRUE(queryParams.isEdited)) as 0 | 1;
+                query.isEdited = _.isTRUE(queryParams.isEdited) ? '1' : '0';
             }
             // Accept both spec `with_users` and legacy `withUsers` input field names.
             const withUsersRaw = queryParams.with_users ?? (queryParams as { withUsers?: unknown }).withUsers;

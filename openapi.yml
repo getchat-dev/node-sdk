@@ -34,49 +34,80 @@ paths:
             maxLength: 255
         - name: created_from
           in: query
-          description: Filter chats created from this date
+          description: >-
+            Chats created at or after this date-time. Strict format
+            `Y-m-d\TH:i:s` (e.g. `2026-07-16T12:00:00`) — no timezone, no
+            milliseconds; anything else is rejected (422).
           required: false
           schema:
             type: string
-            format: date-time
+            pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$'
+            example: '2026-07-16T12:00:00'
         - name: created_to
           in: query
-          description: Filter chats created before this date
+          description: >-
+            Chats created before this date-time (same strict format). Must be
+            >= `created_from` when both are sent — but the handler applies
+            only ONE of the two: when `created_from` is present, `created_to`
+            is ignored.
           required: false
           schema:
             type: string
-            format: date-time
+            pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$'
+            example: '2026-07-16T12:00:00'
         - name: last_message_from
           in: query
-          description: Filter chats with messages from this date
+          description: >-
+            Chats whose last message is at or after this date-time (same
+            strict format). Must be >= `created_from` when both are sent.
+            Combines with `last_message_to`.
           required: false
           schema:
             type: string
-            format: date-time
+            pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$'
+            example: '2026-07-16T12:00:00'
         - name: last_message_to
           in: query
-          description: Filter chats with messages before this date
+          description: >-
+            Chats whose last message is before this date-time (same strict
+            format). Must be >= `last_message_from` and >= `created_from`
+            when those are sent.
           required: false
           schema:
             type: string
-            format: date-time
+            pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$'
+            example: '2026-07-16T12:00:00'
         - name: metadata
           in: query
-          description: Filter by metadata key-value pairs
+          description: >-
+            Filter by metadata key-value pairs, e.g. `metadata[plan]=pro`.
+            Values must be strings (max 255; arrays are rejected). Special
+            values: `null` matches chats where the key is missing/empty;
+            `1`/`true`/`on`/`yes` and `0`/`false`/`off`/`no` match stored
+            boolean `true`/`false`; anything else is compared as an exact
+            string.
           required: false
           style: deepObject
           schema:
             type: object
             additionalProperties:
               type: string
+              maxLength: 255
         - name: with_owners
           in: query
-          description: Include owner information (1 = yes, 0 = no — backend wants integer wire value)
+          deprecated: true
+          description: >-
+            DEPRECATED — use `with_owner`, which embeds the owner inside each
+            chat. Legacy flag that adds the top-level `users` map (keyed by
+            internal id). Still honored by the backend, so it stays here for
+            existing integrations, but new code should use `with_owner`.
+            `1` = yes, `0` = no (integer wire value).
           required: false
           schema:
             type: integer
             enum: [0, 1]
-            default: 0
+        - $ref: '#/components/parameters/withOwnerParam'
+        - $ref: '#/components/parameters/withLastMessageParam'
       responses:
         '200':
           description: List of chats
@@ -87,6 +118,7 @@ paths:
                 required:
                   - status
                   - chats
+                  - chats_sort
                   - meta
                   - pagination
                 properties:
@@ -94,45 +126,34 @@ paths:
                     type: boolean
                   chats:
                     type: object
+                    description: >-
+                      Map keyed by external chat id. NOTE: serialized as an
+                      empty JSON array `[]` (not `{}`) when there are no
+                      chats.
                     additionalProperties:
                       $ref: '#/components/schemas/ChatResource'
                   chats_sort:
                     type: array
+                    description: External chat ids in `created_at asc` order.
                     items:
                       type: string
                   users:
                     type: object
+                    deprecated: true
+                    description: >-
+                      DEPRECATED — use `with_owner`, which embeds the owner as
+                      `owner` inside each chat. Legacy top-level map of chat
+                      owners, returned only to clients still sending the
+                      `with_owners=1` flag; that flag is no longer part of this
+                      spec and will be removed. NOTE: keyed by the INTERNAL user
+                      id (Mongo ObjectId), which does not match the external
+                      `owner_id` inside the chats.
                     additionalProperties:
                       $ref: '#/components/schemas/UserResource'
                   meta:
-                    type: object
-                    required:
-                      - total
-                      - output
-                    properties:
-                      total:
-                        type: integer
-                      output:
-                        type: integer
+                    $ref: '#/components/schemas/PaginationMeta'
                   pagination:
-                    type: object
-                    required:
-                      - items_per_page
-                      - current
-                      - total
-                    properties:
-                      items_per_page:
-                        type: integer
-                      current:
-                        type: integer
-                      total:
-                        type: integer
-                      next_page_url:
-                        type: string
-                        nullable: true
-                      prev_page_url:
-                        type: string
-                        nullable: true
+                    $ref: '#/components/schemas/Pagination'
 
     post:
       summary: Create a new chat
@@ -141,6 +162,7 @@ paths:
         - Chats
       parameters:
         - $ref: '#/components/parameters/preferReturnParam'
+        - $ref: '#/components/parameters/withOwnerParam'
         - $ref: '#/components/parameters/withParticipantsParam'
         - $ref: '#/components/parameters/resultParam'
         - $ref: '#/components/parameters/participantsResultParam'
@@ -158,36 +180,46 @@ paths:
                   required:
                     - id
                     - title
-                    - type
+                    - owner
                   properties:
                     id:
                       type: string
-                      description: Unique chat identifier
-                      maxLength: 255
+                      description: >-
+                        Unique external chat identifier. NOTE: on create only
+                        `required` is enforced — no string/length validation.
                     title:
                       type: string
-                      description: Chat title
+                      description: >-
+                        Chat title. Values longer than 255 chars are silently
+                        truncated with an ellipsis, not rejected.
                       maxLength: 255
                     type:
                       type: string
-                      description: Chat type
+                      description: >-
+                        Chat type. Optional for now (legacy integrations;
+                        planned to become required). When `private`,
+                        `participants` is required with at most 2 items.
                       enum: [private, group, supergroup, channel]
                     metadata:
                       type: object
-                      description: Custom metadata fields
-                      maxProperties: 64
+                      description: >-
+                        Custom metadata. Scalar values only; nested objects
+                        are flattened into dot-notation keys.
+                      maxProperties: 100
                       additionalProperties:
-                        type: string
+                        oneOf:
+                          - type: string
+                          - type: number
+                          - type: boolean
                     owner:
-                      allOf:
-                        - $ref: '#/components/schemas/User'
-                        - type: object
-                          properties:
-                            rights:
-                              $ref: '#/components/schemas/ParticipantRights'
+                      $ref: '#/components/schemas/OwnerInput'
                 participants:
                   type: array
                   maxItems: 10
+                  description: >-
+                    Added together with the owner (an entry with the owner's
+                    id is skipped). Required with at most 2 items when
+                    `chat.type` is `private`; otherwise optional, up to 10.
                   items:
                     $ref: '#/components/schemas/ParticipantInput'
       responses:
@@ -195,7 +227,7 @@ paths:
           description: >-
             Chat created. `chat` is returned only with
             `Prefer: return=representation`; add `with_participants=true` for
-            `participants`.
+            `participants` (the owner is included as the first participant).
           headers:
             Preference-Applied:
               $ref: '#/components/headers/PreferenceApplied'
@@ -214,6 +246,20 @@ paths:
                       $ref: '#/components/schemas/ParticipantResource'
         '409':
           description: Chat already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusError'
+        '422':
+          description: >-
+            Validation failed, owner data missing (`Chat owner is required`),
+            or the create transaction failed.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ValidationError'
+                  - $ref: '#/components/schemas/StatusError'
 
   /chats/{chat_id}:
     parameters:
@@ -228,6 +274,9 @@ paths:
       operationId: chat.show
       tags:
         - Chats
+      parameters:
+        - $ref: '#/components/parameters/withOwnerParam'
+        - $ref: '#/components/parameters/withLastMessageParam'
       responses:
         '200':
           description: Chat details
@@ -240,6 +289,8 @@ paths:
                     type: boolean
                   chat:
                     $ref: '#/components/schemas/ChatResource'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
     put:
       summary: Update chat
@@ -248,6 +299,7 @@ paths:
         - Chats
       parameters:
         - $ref: '#/components/parameters/preferReturnParam'
+        - $ref: '#/components/parameters/withOwnerParam'
         - $ref: '#/components/parameters/resultParam'
       requestBody:
         required: true
@@ -255,6 +307,8 @@ paths:
           application/json:
             schema:
               type: object
+              required:
+                - chat
               properties:
                 chat:
                   type: object
@@ -265,10 +319,20 @@ paths:
                     title:
                       type: string
                       maxLength: 255
+                      description: >-
+                        Values longer than 255 chars are silently truncated
+                        with an ellipsis, not rejected.
                     metadata:
                       type: object
+                      description: >-
+                        Scalar or null values; nested objects are flattened
+                        into dot-notation keys.
                       additionalProperties:
-                        type: string
+                        oneOf:
+                          - type: string
+                          - type: number
+                          - type: boolean
+                          - type: 'null'
       responses:
         '200':
           description: >-
@@ -286,15 +350,29 @@ paths:
                     type: boolean
                   chat:
                     $ref: '#/components/schemas/ChatResource'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          description: Validation failed or the update failed.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ValidationError'
+                  - $ref: '#/components/schemas/StatusError'
 
     delete:
       summary: Delete chat
       operationId: chat.delete
       tags:
         - Chats
+      description: >-
+        Removes every participant and dispatches the actual deletion as
+        background jobs (socket notifications + DB drop), so the chat may
+        disappear shortly after the response.
       responses:
         '200':
-          description: Chat deleted
+          description: Chat deletion dispatched
           content:
             application/json:
               schema:
@@ -302,6 +380,14 @@ paths:
                 properties:
                   status:
                     type: boolean
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          description: Deletion failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusError'
 
   /chats/{chat_id}/participants:
     parameters:
@@ -327,26 +413,18 @@ paths:
                   - meta
                   - pagination
                 properties:
+                  status:
+                    type: boolean
                   participants:
                     type: array
                     items:
                       $ref: '#/components/schemas/ParticipantResource'
                   meta:
-                    type: object
-                    properties:
-                      total:
-                        type: integer
-                      output:
-                        type: integer
+                    $ref: '#/components/schemas/PaginationMeta'
                   pagination:
-                    type: object
-                    properties:
-                      items_per_page:
-                        type: integer
-                      current:
-                        type: integer
-                      total:
-                        type: integer
+                    $ref: '#/components/schemas/Pagination'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
     post:
       summary: Add participants to chat
@@ -359,37 +437,32 @@ paths:
           application/json:
             schema:
               type: object
+              required:
+                - participants
               properties:
                 participants:
                   type: array
                   maxItems: 100
-                  required:
-                    - id
                   items:
-                    type: object
-                    required:
-                      - id
-                    properties:
-                      id:
-                        type: string
-                      name:
-                        type: string
-                        maxLength: 100
-                      email:
-                        type: string
-                        format: email
-                      link:
-                        type: string
-                        format: uri
-                      picture:
-                        type: string
-                      is_bot:
-                        type: boolean
-                      rights:
-                        $ref: '#/components/schemas/ParticipantRights'
+                    $ref: '#/components/schemas/ParticipantInput'
       responses:
         '200':
-          description: Participants added
+          description: Participants added (users are upserted by external id)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          description: Validation failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
 
   /chats/{chat_id}/participants/{user_id}/rights:
     parameters:
@@ -448,9 +521,9 @@ paths:
                   status:
                     type: boolean
                   rights:
-                    type: object
+                    allOf:
+                      - $ref: '#/components/schemas/ParticipantRights'
                     description: Resulting per-chat overrides; `{}` when none. Same shape as GET.
-                    additionalProperties: true
         '404':
           description: User not found in chat
         '422':
@@ -475,9 +548,9 @@ paths:
                   status:
                     type: boolean
                   rights:
-                    type: object
+                    allOf:
+                      - $ref: '#/components/schemas/ParticipantRights'
                     description: Per-chat right overrides (empty when none set).
-                    additionalProperties: true
         '404':
           description: User not found in chat
     delete:
@@ -501,6 +574,12 @@ paths:
                     type: boolean
         '404':
           description: User not found in chat
+        '422':
+          description: Clearing the overrides failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusError'
 
   /chats/{chat_id}/participants/{user_id}:
     parameters:
@@ -519,8 +598,24 @@ paths:
       responses:
         '200':
           description: Participant removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
         '404':
-          description: User not found in chat
+          description: >-
+            User not found in chat (`{status, message}` body), or the
+            chat/user id in the URL didn't resolve (standard `{message}`
+            body).
+        '422':
+          description: Removal failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusError'
 
   /chats/{chat_id}/messages:
     parameters:
@@ -551,21 +646,22 @@ paths:
         - name: isDeleted
           in: query
           description: >-
-            `1` — only deleted messages, `0` — only not deleted. Omit to get
-            both. Pass an integer, not `true`/`false`.
+            Truthy (`1`/`true`/`on`/`yes`) — only deleted messages; any other
+            value — only not-deleted. Omit to get both.
           required: false
           schema:
-            type: integer
-            enum: [0, 1]
+            type: string
+            example: '1'
         - name: isEdited
           in: query
           description: >-
-            `1` — only edited messages, `0` — only never edited. Omit to get
-            both. Pass an integer, not `true`/`false`.
+            Truthy (`1`/`true`/`on`/`yes`) — only edited messages
+            (`updated_at` > `created_at`); any other value — only messages
+            never updated. Omit to get both.
           required: false
           schema:
-            type: integer
-            enum: [0, 1]
+            type: string
+            example: '1'
         - name: extra
           in: query
           description: >-
@@ -602,49 +698,52 @@ paths:
                 required:
                   - status
                   - messages
+                  - messages_sort
                   - meta
                   - pagination
                 properties:
+                  status:
+                    type: boolean
                   messages:
                     type: object
+                    description: >-
+                      Map keyed by message id. NOTE: serialized as an empty
+                      JSON array `[]` (not `{}`) when there are no messages.
                     additionalProperties:
                       $ref: '#/components/schemas/MessageResource'
                   messages_sort:
                     type: array
+                    description: Message ids in the requested `seq` order.
                     items:
                       type: string
                   users:
                     type: object
+                    description: >-
+                      Present only with `with_users=1`. NOTE: keyed by the
+                      INTERNAL user id (Mongo ObjectId) — for messages that
+                      carry an external `user_id` the key does not match it.
                     additionalProperties:
                       $ref: '#/components/schemas/ParticipantResource'
                   meta:
-                    type: object
-                    properties:
-                      total:
-                        type: integer
-                      output:
-                        type: integer
+                    $ref: '#/components/schemas/PaginationMeta'
                   pagination:
-                    type: object
-                    properties:
-                      items_per_page:
-                        type: integer
-                      current:
-                        type: integer
-                      total:
-                        type: integer
-                      next_page_url:
-                        type: string
-                        nullable: true
-                      prev_page_url:
-                        type: string
-                        nullable: true
+                    $ref: '#/components/schemas/Pagination'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
     post:
       summary: Send messages to chat
       operationId: chat.sendMessage
       tags:
         - Chat Messages
+      description: >-
+        Sends up to 50 messages as `user` (the sender is upserted and added to
+        the chat). If the chat id in the URL doesn't exist, pass
+        `chat.create: true` to create the chat on the fly — the id is taken
+        from the URL (`chat.id` in the body is ignored); without the flag a
+        missing chat is a 404. For an existing chat `chat.create` is ignored,
+        `chat.title`/`chat.metadata` update the chat, and `participants` are
+        neither validated nor added (use POST /chats/{chat_id}/participants).
       requestBody:
         required: true
         content:
@@ -656,50 +755,90 @@ paths:
                 - messages
               properties:
                 user:
-                  $ref: '#/components/schemas/User'
+                  allOf:
+                    - $ref: '#/components/schemas/User'
+                  description: >-
+                    The sender. `name` may be omitted only when the user
+                    already exists with a name (it is then kept); otherwise
+                    it is required.
                 chat:
                   type: object
+                  description: >-
+                    When the chat is being created (`create: true`), `title`
+                    is required, `type` is validated, `owner` defaults to
+                    `user` if omitted, and `type: private` requires
+                    `participants` (max 2).
                   properties:
                     create:
                       type: boolean
                       default: false
                       description: >-
-                        Create the chat when it doesn't exist yet (the chat
-                        fields then follow the chat.create rules; `owner`
-                        defaults to the sending `user`). Without this flag a
-                        send into an unknown chat is a 404
-                        ("Can't find chat resource").
+                        Create the chat when the URL id doesn't exist. Forced
+                        to false when the chat already exists.
                     type:
                       type: string
+                      description: Only honored (and validated) when creating.
                       enum: [private, group, supergroup, channel]
                     title:
                       type: string
                       maxLength: 255
+                      description: >-
+                        Required when creating. Longer values are silently
+                        truncated with an ellipsis.
                     metadata:
                       type: object
-                      maxProperties: 64
+                      maxProperties: 100
+                      description: >-
+                        Scalar values; nested objects are flattened into
+                        dot-notation keys.
                       additionalProperties:
-                        type: string
+                        oneOf:
+                          - type: string
+                          - type: number
+                          - type: boolean
+                    owner:
+                      allOf:
+                        - $ref: '#/components/schemas/OwnerInput'
+                      description: >-
+                        Only used when the chat is created; defaults to
+                        `user` when omitted.
                 participants:
                   type: array
                   maxItems: 10
+                  description: >-
+                    Honored only when this request creates the chat
+                    (required, max 2, when creating a `private` chat; up to
+                    10 otherwise). Ignored for an existing chat.
                   items:
                     $ref: '#/components/schemas/ParticipantInput'
                 messages:
                   type: array
                   maxItems: 50
-                  required:
-                    - text
                   items:
                     type: object
-                    required:
-                      - text
+                    anyOf:
+                      - required: [text]
+                      - required: [voice_url]
+                    description: Each message needs `text` or `voice_url`.
                     properties:
                       text:
                         type: string
+                        nullable: true
                         maxLength: 4096
+                        description: Required unless `voice_url` is set.
+                      voice_url:
+                        type: string
+                        format: uri
+                        maxLength: 2048
+                        description: >-
+                          http(s) URL of a voice recording. The original is
+                          downloaded and attached before the message is
+                          stored; transcoding to ogg/opus happens async.
                       extra:
                         type: object
+                        maxProperties: 100
+                        description: >-
+                          Nested objects are flattened into dot-notation keys.
                         additionalProperties:
                           oneOf:
                             - type: string
@@ -707,13 +846,23 @@ paths:
                             - type: boolean
                       recipient_id:
                         type: string
+                        description: >-
+                          External id of an EXISTING user; an unknown id
+                          fails validation (422).
                       buttons:
                         type: array
-                        maxItems: 4
+                        maxItems: 20
                         items:
                           $ref: '#/components/schemas/Button'
                       disable_notification:
                         type: boolean
+                force:
+                  type: boolean
+                  default: false
+                  description: >-
+                    Post even when the sender is muted in this chat
+                    (`rights.send_messages` is `false`) — no 403. Does not
+                    change the stored rights.
       responses:
         '200':
           description: Messages sent
@@ -731,7 +880,8 @@ paths:
         '403':
           description: >-
             The sending `user` is muted in this chat (`rights.send_messages` is
-            `false`) and cannot post — same policy the socket enforces.
+            `false`) and cannot post — same policy the socket enforces. Pass
+            `force: true` to post anyway.
           content:
             application/json:
               schema:
@@ -743,8 +893,29 @@ paths:
                     type: string
         '404':
           description: >-
-            Chat does not exist and `chat.create` was not set — the backend
-            answers `{"status": false, "error": "Can't find chat resource"}`.
+            Chat not found and `chat.create` was not requested. NOTE: this
+            body carries the text under `error`, not `message`.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    example: Can't find chat resource
+        '422':
+          description: >-
+            Validation failed, chat processing failed, or storing the
+            messages failed.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ValidationError'
+                  - $ref: '#/components/schemas/StatusError'
 
   /chats/{chat_id}/messages/{message}:
     parameters:
@@ -763,23 +934,37 @@ paths:
       parameters:
         - $ref: '#/components/parameters/preferReturnParam'
         - $ref: '#/components/parameters/resultParam'
+      description: >-
+        Edits text (previous versions are kept), soft-deletes/restores, and
+        updates `extra`/`buttons`. `is_deleted: true` nulls the text; setting
+        a new `text` on a deleted message restores it.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
+              required:
+                - message
               properties:
                 message:
                   type: object
+                  description: >-
+                    Not validated as required, but a request without
+                    `message` crashes the handler — always send it.
                   properties:
                     text:
                       type: string
+                      nullable: true
                       maxLength: 4096
                     is_deleted:
                       type: boolean
                     extra:
                       type: object
+                      nullable: true
+                      description: >-
+                        No size cap here (unlike send). `null` clears extra
+                        in `replace` mode.
                       additionalProperties:
                         oneOf:
                           - type: string
@@ -787,12 +972,17 @@ paths:
                           - type: boolean
                     buttons:
                       type: array
-                      maxItems: 4
+                      maxItems: 20
                       items:
                         $ref: '#/components/schemas/Button'
                 update_extra_mode:
                   type: string
                   enum: [merge, replace]
+                  default: merge
+                  description: >-
+                    `merge` (default) merges keys into the existing `extra`;
+                    `replace` overwrites it. When the message has no `extra`
+                    yet, replace semantics apply regardless.
       responses:
         '200':
           description: >-
@@ -813,6 +1003,14 @@ paths:
                     type: boolean
                   message:
                     $ref: '#/components/schemas/MessageResource'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          description: Validation failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
 
   /chats/{chat_id}/typing/{user_id}:
     parameters:
@@ -837,6 +1035,7 @@ paths:
             indicator before it auto-hides. Omit to use the client default (5s).
             Validation is lenient: a missing, non-integer, or out-of-range value
             is silently ignored and the client default applies (no error).
+            Accepted in the query string or the request body.
           schema:
             type: integer
             minimum: 1
@@ -844,6 +1043,15 @@ paths:
       responses:
         '200':
           description: Typing indicator sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /chats/{chat_id}/webhook:
     parameters:
@@ -859,6 +1067,10 @@ paths:
           application/json:
             schema:
               type: object
+              description: At least one of `disabled` / `url` is required.
+              anyOf:
+                - required: [disabled]
+                - required: [url]
               properties:
                 disabled:
                   type: boolean
@@ -867,7 +1079,29 @@ paths:
                   format: uri
       responses:
         '200':
-          description: Webhook settings updated
+          description: >-
+            Always HTTP 200. `status: true` — settings were written;
+            `status: false` — either nothing changed (same values re-sent) or
+            the update failed (`message` is then present). Failures are NOT
+            signalled via the HTTP status code.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                  message:
+                    type: string
+                    description: Present only when the update threw an error.
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          description: Validation failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
 
   /chats/{chat_id}/s3-credentials:
     parameters:
@@ -913,7 +1147,9 @@ paths:
                   format: uri
       responses:
         '200':
-          description: S3 credentials updated
+          description: >-
+            S3 credentials stored. `modified: false` means the same
+            credentials were already set (nothing written).
           content:
             application/json:
               schema:
@@ -923,6 +1159,14 @@ paths:
                     type: boolean
                   modified:
                     type: boolean
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          description: Validation failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
 
   /users:
     post:
@@ -1108,6 +1352,13 @@ paths:
           required: false
           schema:
             type: boolean
+        - name: type
+          in: query
+          description: Filter by chat type
+          required: false
+          schema:
+            type: string
+            enum: [private, group, supergroup, channel]
         - name: metadata
           in: query
           description: Filter by metadata
@@ -1129,6 +1380,23 @@ paths:
             type: integer
             enum: [0, 1]
             default: 0
+        - name: with_participants
+          in: query
+          description: >-
+            Embed each chat's participants as `participants` (a ParticipantResource
+            array). 1 = yes, 0 = no — same integer wire value as
+            `with_last_message`. Honored only for `private` chats and `group`
+            chats up to the tenant's threshold (default 100 members); larger
+            groups require the `api_settings.participants_listing.list_large_groups`
+            tenant override. When participants are withheld the chat instead
+            carries `participants_omitted` explaining why. `supergroup` and
+            `channel` chats never embed participants.
+          required: false
+          schema:
+            type: integer
+            enum: [0, 1]
+            default: 0
+        - $ref: '#/components/parameters/withOwnerParam'
       responses:
         '200':
           description: List of chats
@@ -1147,27 +1415,9 @@ paths:
                     items:
                       $ref: '#/components/schemas/ChatResource'
                   meta:
-                    type: object
-                    properties:
-                      total:
-                        type: integer
-                      output:
-                        type: integer
+                    $ref: '#/components/schemas/PaginationMeta'
                   pagination:
-                    type: object
-                    properties:
-                      items_per_page:
-                        type: integer
-                      current:
-                        type: integer
-                      total:
-                        type: integer
-                      next_page_url:
-                        type: string
-                        nullable: true
-                      prev_page_url:
-                        type: string
-                        nullable: true
+                    $ref: '#/components/schemas/Pagination'
 
   /users/{user_id}/fcm_tokens:
     parameters:
@@ -1439,6 +1689,48 @@ paths:
         '200':
           description: Push notification settings updated
 
+  /settings/participants:
+    put:
+      summary: Set participant-listing settings
+      operationId: tenant.setParticipantsListingSettings
+      tags:
+        - Settings
+      description: >-
+        Controls whether large `group` chats expose their participants inline
+        via `with_participants` on GET /users/{user_id}/chats (and other
+        ChatResource endpoints). Stored under
+        `api_settings.participants_listing`. At least one field is required;
+        fields are updated independently.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                list_large_groups:
+                  type: boolean
+                  description: >-
+                    When true, groups larger than `group_threshold` also embed
+                    their participants. `supergroup`/`channel` are unaffected.
+                group_threshold:
+                  type: integer
+                  minimum: 1
+                  maximum: 1000
+                  description: >-
+                    Group size up to which participants are always embedded.
+                    Defaults to 100 when unset.
+      responses:
+        '200':
+          description: Participant-listing settings updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+
   /clear:
     put:
       summary: Clear tenant data
@@ -1493,6 +1785,8 @@ components:
       description: >-
         Per-chat right overrides. Each key optional; booleans accept
         `true`/`false`/`null`. Mirrors the signed-link rights schema.
+        A repeated participant id (or one equal to the chat owner) keeps
+        only its first occurrence.
       properties:
         send_messages: { type: boolean, nullable: true }
         can_press_buttons: { type: boolean, nullable: true }
@@ -1514,14 +1808,14 @@ components:
         react_messages: { type: boolean, nullable: true }
         leave_chats: { type: boolean, nullable: true }
 
-    ParticipantInput:
-      description: |
-        Participant payload for chat creation / addParticipants / sendMessage.
-        Distinct from `User` because participants carry an optional `is_bot` flag
-        that the bare User entity doesn't model.
+    OwnerInput:
       type: object
-      required:
-        - id
+      description: >-
+        Chat owner payload. Validation itself marks every field optional, but
+        POST /chats rejects a chat without owner data (422 "Chat owner is
+        required"). Omitting `id` creates a fresh detached user record on
+        every call — always pass `id`. The owner is also added as the chat's
+        first participant and may carry per-chat `rights`.
       properties:
         id:
           type: string
@@ -1537,8 +1831,53 @@ components:
           format: uri
         picture:
           type: string
+          format: uri
+        metadata:
+          type: object
+          maxProperties: 100
+          description: >-
+            Scalar values (null allowed); nested objects are flattened into
+            dot-notation keys. NOTE: currently ignored by the user upsert —
+            not persisted.
+          additionalProperties:
+            oneOf:
+              - type: string
+              - type: number
+              - type: boolean
+              - type: 'null'
+        rights:
+          $ref: '#/components/schemas/ParticipantRights'
+
+    ParticipantInput:
+      description: |
+        Participant payload for chat creation / addParticipants / sendMessage.
+        Distinct from `User` because participants carry an optional `is_bot` flag
+        that the bare User entity doesn't model.
+      type: object
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          description: External user id (no length limit is enforced).
+        name:
+          type: string
+          maxLength: 100
+        email:
+          type: string
+          format: email
+          maxLength: 100
+        link:
+          type: string
+          format: uri
+        picture:
+          type: string
+          description: Plain string — not validated as a URL here.
         is_bot:
           type: boolean
+          description: >-
+            Accepted but currently NOT persisted — the user upsert only reads
+            a camelCase `isBot` field, which this API never produces.
         rights:
           $ref: '#/components/schemas/ParticipantRights'
 
@@ -1591,6 +1930,9 @@ components:
       required:
         - id
         - name
+      description: >-
+        On POST /chats/{chat_id}/messages `name` is required only when the
+        user doesn't exist yet (or exists without a name).
       properties:
         id:
           type: string
@@ -1609,9 +1951,16 @@ components:
           format: uri
         metadata:
           type: object
-          maxProperties: 64
+          maxProperties: 100
+          description: >-
+            Scalar values; nested objects are flattened into dot-notation
+            keys. NOTE: on chat-scoped endpoints (send message, chat create)
+            the user upsert currently ignores metadata.
           additionalProperties:
-            type: string
+            oneOf:
+              - type: string
+              - type: number
+              - type: boolean
 
     UserResource:
       type: object
@@ -1635,8 +1984,10 @@ components:
           $ref: '#/components/schemas/Avatar'
         created_at:
           type: string
+          format: date-time
         updated_at:
           type: string
+          format: date-time
         metadata:
           type: object
           additionalProperties:
@@ -1664,26 +2015,32 @@ components:
           $ref: '#/components/schemas/Avatar'
         created_at:
           type: string
+          format: date-time
         updated_at:
           type: string
+          format: date-time
 
     ChatResource:
       type: object
       required:
         - id
         - type
+        - title
         - created_at
         - updated_at
       properties:
         id:
           type: string
-          description: Chat ID
+          description: External chat ID
         type:
           type: string
-          description: Chat type
+          nullable: true
+          description: >-
+            Chat type; null for legacy chats created without one.
           enum: [private, group, supergroup, channel]
         title:
           type: string
+          nullable: true
           description: Chat title
         created_at:
           type: string
@@ -1694,52 +2051,109 @@ components:
         last_message_at:
           type: string
           format: date-time
+          description: Present only when the chat has messages.
         last_message:
           description: >-
             The chat's most recent message. Present only when requested via
-            `with_last_message=true` (see GET /users/{user_id}/chats).
+            `with_last_message` (GET /chats, GET /chats/{chat_id},
+            GET /users/{user_id}/chats).
           allOf:
             - $ref: '#/components/schemas/MessageResource'
         owner_id:
           type: string
-          description: External owner ID
+          description: External owner ID; present only when the chat has one.
         owner:
-          $ref: '#/components/schemas/UserResource'
+          description: Present only with `with_owner` (see the parameter).
+          allOf:
+            - $ref: '#/components/schemas/UserResource'
+        participants:
+          type: array
+          description: >-
+            The chat's participants. Present only when requested via
+            `with_participants` and the chat is eligible (see the parameter).
+          items:
+            $ref: '#/components/schemas/ParticipantResource'
+        participants_omitted:
+          type: object
+          description: >-
+            Present instead of `participants` when `with_participants` was
+            requested but participants were withheld for this chat.
+          required:
+            - reason
+            - members_count
+          properties:
+            reason:
+              type: string
+              enum: [large_group, unsupported_type]
+              description: >-
+                `large_group` — a group above the tenant threshold with the
+                override off (see `hint`); `unsupported_type` — a supergroup or
+                channel, which never embeds participants.
+            members_count:
+              type: integer
+            hint:
+              type: string
+              description: >-
+                How to lift the omission. Present only for `large_group`, where
+                enabling the tenant override would include participants.
         metadata:
           type: object
+          description: Present only when non-empty. Values are scalars.
           additionalProperties:
-            type: string
+            oneOf:
+              - type: string
+              - type: number
+              - type: boolean
 
     MessageResource:
       type: object
       required:
         - id
+        - seq
         - user_id
+        - text
         - created_at
+        - updated_at
         - is_deleted
+        - is_edited
+        - versions
+        - extra
       properties:
         id:
           type: string
+        seq:
+          type: integer
+          description: Monotonic per-chat sequence number (the sort key).
         user_id:
           type: string
+          description: >-
+            The sender's EXTERNAL id when known; the internal id for legacy
+            messages without one.
         text:
           type: string
+          nullable: true
+          description: Null for deleted messages.
         created_at:
           type: integer
           format: int64
+          description: Unix timestamp (seconds).
         updated_at:
           type: integer
           format: int64
           nullable: true
+          description: Unix timestamp (seconds); null until the first update.
         is_deleted:
           type: boolean
         is_edited:
           type: boolean
         versions:
           type: integer
-          description: Number of message versions
+          description: Number of stored previous versions
         extra:
           type: object
+          description: >-
+            NOTE: serialized as an empty JSON array `[]` (not `{}`) when
+            there are no extra fields.
           additionalProperties:
             oneOf:
               - type: string
@@ -1747,25 +2161,90 @@ components:
               - type: boolean
         recipient_id:
           type: string
+          description: External recipient id; present only when set.
         buttons:
           type: array
-          maxItems: 4
+          maxItems: 20
           items:
+            $ref: '#/components/schemas/Button'
+
+    PaginationMeta:
+      type: object
+      description: Row counts behind a list response.
+      required:
+        - total
+        - output
+      properties:
+        total:
+          type: integer
+          description: Rows the query matched across all pages.
+        output:
+          type: integer
+          description: Rows this page carries.
+
+    Pagination:
+      type: object
+      description: Page state of a list response.
+      required:
+        - items_per_page
+        - current
+        - total
+      properties:
+        items_per_page:
+          type: integer
+          description: Effective page size — the requested `limit` after clamping.
+        current:
+          type: integer
+          description: >-
+            Requested page clamped to the page count; 0 when nothing matched.
+        total:
+          type: integer
+          description: Number of pages; 0 when nothing matched.
+        next_page_url:
+          type: string
+          nullable: true
+          description: Null on the last page.
+        prev_page_url:
+          type: string
+          nullable: true
+          description: Null on the first page.
+
+    StatusError:
+      type: object
+      description: >-
+        Controller-level failure — `status: false` plus a `message`.
+      properties:
+        status:
+          type: boolean
+          example: false
+        message:
+          type: string
+
+    ValidationError:
+      type: object
+      description: Standard Laravel validation error body (HTTP 422).
+      properties:
+        message:
+          type: string
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+
+  responses:
+    NotFound:
+      description: >-
+        A URL-bound resource (chat / user / message) was not found. Standard
+        Laravel 404 body.
+      content:
+        application/json:
+          schema:
             type: object
             properties:
-              action:
+              message:
                 type: string
-              type:
-                type: string
-                enum: [url, call, local, remote]
-              label:
-                type: string
-              state:
-                type: string
-                enum: [default, loading, disabled]
-              style:
-                type: string
-                enum: [primary, positive, negative, neutral]
 
   headers:
     PreferenceApplied:
@@ -1786,6 +2265,34 @@ components:
       schema:
         type: string
       description: Chat ID
+
+    withOwnerParam:
+      name: with_owner
+      in: query
+      required: false
+      description: >-
+        Embed the chat owner as `owner` (a UserResource) inside each returned
+        chat. Truthy values: `1`, `true`, `on`, `yes` (unvalidated — anything
+        else counts as no). On GET /chats it is force-disabled when the
+        `owner` filter is used. On POST /chats and PUT /chats/{chat_id} it
+        applies only when the chat is echoed back
+        (`Prefer: return=representation`).
+      schema:
+        type: string
+        example: '1'
+
+    withLastMessageParam:
+      name: with_last_message
+      in: query
+      required: false
+      description: >-
+        Embed each chat's latest message as `last_message` (a
+        MessageResource). Truthy values: `1`, `true`, `on`, `yes`
+        (unvalidated here; on GET /users/{user_id}/chats this parameter is
+        validated as a Laravel boolean instead — see that endpoint).
+      schema:
+        type: string
+        example: '1'
 
     syncParam:
       name: sync
@@ -1850,19 +2357,24 @@ components:
     limitParam:
       name: limit
       in: query
-      description: Number of items to return
       required: false
+      description: >-
+        Items per page (default 50). Must be an integer >= 1 — `0` and negative
+        values are rejected with 422. Values above the endpoint's ceiling are
+        silently clamped, not rejected; the ceiling is 1000 everywhere except
+        GET /users/{user_id}/chats, where it is 250.
       schema:
         type: integer
         minimum: 1
-        maximum: 1000
         default: 50
 
     pageParam:
       name: page
       in: query
-      description: Page number
       required: false
+      description: >-
+        Page number (default 1). Must be an integer >= 1; a page past the last
+        one is clamped to the last page.
       schema:
         type: integer
         minimum: 1
@@ -1872,15 +2384,12 @@ components:
     bearerAuth:
       type: http
       scheme: bearer
-      bearerFormat: JWT
-    apiKeyQuery:
-      type: apiKey
-      in: query
-      name: api_key
-    apiKeyHeader:
-      type: apiKey
-      in: header
-      name: X-API-Key
+      description: >-
+        Opaque tenant token (`Client.api_token`) — not a JWT. Must be sent in
+        the `Authorization: Bearer` header: tenant resolution compares
+        exactly this header, so query-string token variants do not work.
+        Missing or wrong token yields 401 (auth guard) or 403 (tenant
+        resolution).
 
 security:
   - bearerAuth: []

@@ -153,13 +153,18 @@ export type _inSendMsgNoMessages = ExpectFalse<
     AcceptsInput<'chatSendMessage', { path: { chat_id: 'c1' }; body: { user: { id: 'u1'; name: 'U' } } }>
 >;
 
-// chatCreate — body.chat requires id + title + type
+// chatCreate — body.chat requires id + title + owner (type is optional per spec)
 export type _inCreateChatOk = Expect<
+    AcceptsInput<
+        'chatCreate',
+        { body: { chat: { id: 'c1'; title: 'T'; type: 'group'; owner: { id: 'o1'; name: 'Owner' } } } }
+    >
+>;
+export type _inCreateChatNoOwner = ExpectFalse<
     AcceptsInput<'chatCreate', { body: { chat: { id: 'c1'; title: 'T'; type: 'group' } } }>
 >;
-export type _inCreateChatNoType = ExpectFalse<AcceptsInput<'chatCreate', { body: { chat: { id: 'c1'; title: 'T' } } }>>;
 export type _inCreateChatNoTitle = ExpectFalse<
-    AcceptsInput<'chatCreate', { body: { chat: { id: 'c1'; type: 'group' } } }>
+    AcceptsInput<'chatCreate', { body: { chat: { id: 'c1'; type: 'group'; owner: { id: 'o1'; name: 'Owner' } } } }>
 >;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -287,7 +292,7 @@ export function _excessRejected() {
         }),
         emby.api.chatCreate({
             body: {
-                chat: { id: 'c1', title: 'T', type: 'group' },
+                chat: { id: 'c1', title: 'T', type: 'group', owner: { id: 'o1', name: 'Owner' } },
                 // @ts-expect-error `bogus` is not a known field inside `body`
                 bogus: true,
             },

@@ -108,7 +108,8 @@ describe('live: wire-format regressions', { skip: SKIP_REASON }, () => {
     test('isDeleted=1 + isEdited=1 — accepted, returns shape', async (t) => {
         const r = await sdk.api.chatMessages<{ messages?: Record<string, unknown> }>({
             path: { chat_id: chatId },
-            query: { isDeleted: 1, isEdited: 1 },
+            // spec types these as string; the backend reads them with a lenient truthy filter
+            query: { isDeleted: '1', isEdited: '1' },
         });
         t.diagnostic(`combined filter → ${Object.keys(r.messages ?? {}).length} msgs`);
         assert.ok(r.messages !== undefined, 'response missing messages key');

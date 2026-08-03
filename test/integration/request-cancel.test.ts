@@ -91,12 +91,14 @@ describe('per-call cancellation & overrides', () => {
         server.respondWith({ status: 201, body: { status: true } });
         const ac = new AbortController();
         await sdk().api.chatCreate({
-            body: { chat: { id: 'c1', title: 'T', type: 'group' } },
+            body: { chat: { id: 'c1', title: 'T', type: 'group', owner: { id: 'o1', name: 'Owner' } } },
             signal: ac.signal,
             timeout: 5000,
         });
         // The JSON body must carry only `chat`, never signal/timeout.
-        assert.deepEqual(server.lastRequest!.body, { chat: { id: 'c1', title: 'T', type: 'group' } });
+        assert.deepEqual(server.lastRequest!.body, {
+            chat: { id: 'c1', title: 'T', type: 'group', owner: { id: 'o1', name: 'Owner' } },
+        });
         assert.equal((server.lastRequest!.body as Record<string, unknown>).signal, undefined);
     });
 });
