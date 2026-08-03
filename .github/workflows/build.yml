@@ -1,0 +1,176 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  id-token: write  # Required for OIDC
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+    - run: npm ci
+    - run: npm run build
+    # Dual publish — both entry points must be emitted, or consumers on one
+    # module system get nothing.
+    - run: ls dist/cjs/index.js dist/esm/index.js
+
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+    - run: npm ci
+    - run: npm run typecheck
+    - run: npm run check
+    - run: npm test
+
+  # Validates the published package as a consumer sees it: the dual CJS/ESM
+  # bundle and the generated .d.ts, which the source build above never
+  # exercises. Packs the real tarball (prepack re-runs the build), then loads it
+  # three ways — CommonJS require, ESM import, and a TypeScript compile under
+  # nodenext — so a broken export or a mis-ordered `exports` map (types resolving
+  # to the wrong .d.ts) fails CI instead of slipping into npm.
+  verify-package:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+
+    - run: npm ci
+
+    - name: Pack (runs prepack — build) and smoke-test a consumer
+      run: |
+        set -euo pipefail
+        PKG=$(npm pack 2>/dev/null | tail -1)
+        echo "packed: $PKG"
+        DIR=$(mktemp -d)
+        cp "$PKG" "$DIR/"
+        cd "$DIR"
+        npm init -y >/dev/null
+        npm install "$DIR/$PKG" typescript >/dev/null
+
+        node -e "const E = require('@emby-chat/node-sdk'); const C = E.default || E; if (typeof C !== 'function') throw new Error('CJS default export is not the Emby class'); if (typeof E.TimeoutError !== 'function') throw new Error('CJS named export TimeoutError missing'); console.log('CJS require OK');"
+
+        node --input-type=module -e "import E, { TimeoutError } from '@emby-chat/node-sdk'; if (typeof E !== 'function') throw new Error('ESM default export is not the Emby class'); if (typeof TimeoutError !== 'function') throw new Error('ESM named export TimeoutError missing'); console.log('ESM import OK');"
+
+        {
+          echo "import Emby, { TimeoutError } from '@emby-chat/node-sdk';"
+          echo "import type { Participant, ParticipantRights } from '@emby-chat/node-sdk';"
+          echo "const sdk = new Emby({ api_token: 't', base_url: 'https://x' });"
+          echo "const p: Participant = { id: 'u1', rights: {} as ParticipantRights };"
+          echo "void [sdk, TimeoutError, p];"
+        } > probe.ts
+        npx tsc --noEmit --strict --module nodenext --moduleResolution nodenext --target ES2022 probe.ts
+        echo "OK: default + named exports and public types resolve from the tarball (CJS, ESM, and .d.ts)"
+
+  # Publishes to npm only on push to main, and only when the version in
+  # package.json is not already on the registry. Auth is via OIDC trusted
+  # publishing (configured on npmjs.com) — no NPM_TOKEN secret, just the
+  # id-token: write permission below and a recent npm (>= 11.5.1).
+  #
+  # A successful publish is then tagged as a GitHub Release, so a tag can never
+  # point at a version that is not on the registry.
+  publish:
+    needs: [build, test, verify-package]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write   # create the release tag
+      id-token: write   # mint the OIDC token npm trusted publishing verifies
+
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+        registry-url: 'https://registry.npmjs.org'
+        package-manager-cache: false
+
+    - name: Publish if package.json version is new
+      id: publish
+      run: |
+        set -euo pipefail
+        NAME=$(node -p "require('./package.json').name")
+        VERSION=$(node -p "require('./package.json').version")
+        echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+        if npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
+          echo "$NAME@$VERSION is already published — skipping"
+        else
+          echo "publishing $NAME@$VERSION"
+          npm install -g npm@latest
+          npm ci
+          npm publish --access public
+          echo "published=true" >> "$GITHUB_OUTPUT"
+        fi
+
+    # `gh release create` creates the tag itself, so no git tag/push is needed.
+    # --generate-notes writes the release body from commits since the last tag.
+    - name: Tag the release
+      if: steps.publish.outputs.published == 'true'
+      env:
+        GH_TOKEN: ${{ github.token }}
+        VERSION: ${{ steps.publish.outputs.version }}
+      run: gh release create "v$VERSION" --title "v$VERSION" --generate-notes
+
+  # Sends exactly one Telegram message per run: success only when every stage
+  # passed (reported once, at the end), failure if any stage failed or was
+  # cancelled. Skipped stages (e.g. publish on a PR, or when the version is not
+  # new) do not count as failure. Runs last, always.
+  notify:
+    needs: [build, test, verify-package, publish]
+    if: always()
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Notify Telegram
+      env:
+        BOT: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
+        FAILED: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+      run: |
+        set -euo pipefail
+        if [ -z "${BOT}" ] || [ -z "${CHAT}" ]; then
+          echo "Telegram secrets not set — skipping notification"
+          exit 0
+        fi
+        RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+        if [ "${FAILED}" = "true" ]; then
+          ICON="❌"; STATUS="failed"
+        else
+          ICON="✅"; STATUS="passed"
+        fi
+        TEXT=$(printf '%s node-sdk CI %s\nbranch: %s\ncommit: %s\n%s' \
+          "${ICON}" "${STATUS}" "${GITHUB_REF_NAME}" "${GITHUB_SHA:0:7}" "${RUN_URL}")
+        # Telegram explains every rejection in the response body, so print it
+        # instead of letting curl --fail swallow it.
+        CODE=$(curl -sS -o /tmp/telegram.json -w '%{http_code}' \
+          -X POST "https://api.telegram.org/bot${BOT}/sendMessage" \
+          --data-urlencode "chat_id=${CHAT}" \
+          --data-urlencode "text=${TEXT}" \
+          --data-urlencode "disable_web_page_preview=true")
+        if [ "${CODE}" != "200" ]; then
+          echo "Telegram rejected the message (HTTP ${CODE}):"
+          cat /tmp/telegram.json
+          exit 1
+        fi
+        echo "sent: ${STATUS}"
