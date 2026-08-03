@@ -17,6 +17,7 @@ const THRESHOLD = 90;
 const ALLOW_LIST = new Set([
     'src/index.ts',
     'src/libs/helpers.ts',
+    'src/libs/paginate.ts',
     'src/libs/processUserRights.ts',
     'src/libs/signing.ts',
 ]);

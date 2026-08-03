@@ -22,8 +22,22 @@
 // literal/call-site feature TS cannot express structurally (`{ a; b } extends { a }`
 // is true), so those few use `@ts-expect-error` at a real call site.
 
-import type { Avatar } from '../../src/generated/schemas.js';
-import type { ChatArg, Emby, MessageTextInput, UpdateMessageInput, UpdateMessageOptions } from '../../src/index.js';
+import type {
+    ChatResource as ApiChatResource,
+    MessageResource as ApiMessageResource,
+    ParticipantResource as ApiParticipantResource,
+    Avatar,
+} from '../../src/generated/schemas.js';
+import type {
+    ChatArg,
+    Emby,
+    MessageTextInput,
+    Page,
+    PageIterator,
+    RequestControlOptions,
+    UpdateMessageInput,
+    UpdateMessageOptions,
+} from '../../src/index.js';
 import type {
     ChatCreate,
     ChatUpdate,
@@ -104,6 +118,42 @@ export type _sigUpdateUser = Expect<Equal<Parameters<Emby['updateUser']>, [userI
 export type _sigDeleteUser = Expect<Equal<Parameters<Emby['deleteUser']>, [userId: string]>>;
 export type _sigGetUserChats = Expect<
     Equal<Parameters<Emby['getUserChats']>, [userId: string, query?: GetUserChatsQuery]>
+>;
+
+// The four page-walkers: same query as the one-page method, plus the per-call
+// options, and a `PageIterator` of the matching resource on the way out.
+export type _sigIterateChats = Expect<
+    Equal<Parameters<Emby['iterateChats']>, [query?: GetChatsQuery & RequestControlOptions]>
+>;
+export type _retIterateChats = Expect<Equal<ReturnType<Emby['iterateChats']>, PageIterator<ApiChatResource>>>;
+export type _sigIterateMessages = Expect<
+    Equal<
+        Parameters<Emby['iterateMessagesFromChat']>,
+        [chatId: string, query?: GetChatMessagesQuery & RequestControlOptions]
+    >
+>;
+export type _retIterateMessages = Expect<
+    Equal<ReturnType<Emby['iterateMessagesFromChat']>, PageIterator<ApiMessageResource>>
+>;
+export type _sigIterateParticipants = Expect<
+    Equal<
+        Parameters<Emby['iterateChatParticipants']>,
+        [chatId: string, query?: PaginationQuery & RequestControlOptions]
+    >
+>;
+export type _retIterateParticipants = Expect<
+    Equal<ReturnType<Emby['iterateChatParticipants']>, PageIterator<ApiParticipantResource>>
+>;
+export type _sigIterateUserChats = Expect<
+    Equal<Parameters<Emby['iterateUserChats']>, [userId: string, query?: GetUserChatsQuery & RequestControlOptions]>
+>;
+export type _retIterateUserChats = Expect<Equal<ReturnType<Emby['iterateUserChats']>, PageIterator<ApiChatResource>>>;
+
+// A page hands over its items plus the counts and the untouched answer.
+export type _pageShape = Expect<Equal<keyof Page<number>, 'items' | 'meta' | 'pagination' | 'raw'>>;
+// Walking one yields the resource itself, not a page of them.
+export type _iterYieldsItems = Expect<
+    Equal<PageIterator<ApiChatResource> extends AsyncIterable<infer I> ? I : never, ApiChatResource>
 >;
 
 // ─────────────────────────────────────────────────────────────────────────────

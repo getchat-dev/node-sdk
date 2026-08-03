@@ -13,7 +13,7 @@ Anything edited under `src/` is public surface area — version is bumped in `pa
 
 ## Commands
 
-- `npm test` — runs node's built-in test runner on TS sources via `tsx` (318 tests: 5 unit + 16 integration files). No compilation, tests import from `src/` directly.
+- `npm test` — runs node's built-in test runner on TS sources via `tsx` (403 tests: 6 unit + 22 integration files). No compilation, tests import from `src/` directly.
 - `npm run test:live` — opt-in E2E against a real tenant (needs `.env` with `EMBY_API_TOKEN` + `EMBY_BASE_URL`; 50 tests across happy-path / wire-format regressions / edge cases). Suites skip themselves if creds missing. Runs serially via `--test-concurrency=1` because each `before/after` calls `tenant.clearData({ sync: true })` and parallel suites would race-wipe each other. **Never point at production.** See `test/live/README.md`.
 - `npm run typecheck` — `tsc --noEmit` across src + test.
 - `npm run build` — cleans `dist/`, compiles `tsconfig.cjs.json` → `dist/cjs`, `tsconfig.esm.json` → `dist/esm`, then writes `{"type":"commonjs"}` / `{"type":"module"}` stub `package.json` inside each subdir so Node resolves module kind correctly.
@@ -41,14 +41,15 @@ src/
 │   ├── processUserRights.ts
 │   ├── rights.scheme.ts
 │   ├── requestOptions.ts — options schema/resolver, TimeoutError, RequestControlOptions
-│   └── retry.ts          — retry policy (idempotency, backoff, Retry-After), abortable sleep
+│   ├── retry.ts          — retry policy (idempotency, backoff, Retry-After), abortable sleep
+│   └── paginate.ts       — page-walking (PageIterator, stop rules, item extractors)
 └── generated/            — regenerated from openapi.yml via `npm run generate`
     ├── schemas.ts        — Zod schemas + z.infer types for components.schemas
     └── operations.ts     — createOperations(transport) factory, one fn per operationId
 
 test/
 ├── helpers/              — mockServer, sdkFactory, loadFixture, seededRandom
-├── unit/*.test.ts        — helpers, signing, processUserRights
+├── unit/*.test.ts        — helpers, signing, processUserRights, paginate
 ├── integration/*.test.ts — per-method tests against in-process mock server
 ├── types/*.test-d.ts     — compile-time type assertions, enforced by `npm run typecheck`,
 │                           NOT run by `node --test`. `response-types` pins the response-type
@@ -114,6 +115,17 @@ The public signatures in `src/index.ts` are stable consumer API and **must not b
 Each wrapper defaults its return generic to the matching operation's `XResponse` type (e.g. `getChatInfo<T = ChatShowResponse>`), so callers get a typed response without passing `<T>`; an explicit `<T>` still overrides. `requestApi` itself stays `<T = unknown>` (it's the raw transport).
 
 If you add a new high-level method, the same pattern applies: a thin coercing wrapper around `this.api.<operationId>(...)`, defaulting `T` to the operation's `XResponse`. Don't reach for `requestApi` directly unless you have a reason the spec can't express.
+
+### Page walkers (1.22)
+
+`iterateChats`, `iterateMessagesFromChat`, `iterateChatParticipants`, `iterateUserChats` — one per paginated endpoint. Each returns a `PageIterator<T>` (`libs/paginate.ts`): async-iterable over the items, plus `.pages()` and `.toArray()`, and every one of the three starts a fresh walk from the first page.
+
+- The query builders that were inline in the one-page wrappers are now private methods (`chatListQuery`, `chatMessagesQuery`, `userChatsQuery`) shared by both, so a filter is coerced exactly once and identically for both entry points. Keep it that way when adding a filter.
+- A walker calls `.api.*` directly (not the wrapper) so per-call control options (`signal`/`timeout`/…) can ride along; they're pulled out with `pickRequestControl` and never reach the query string.
+- Page size defaults to 100 (`DEFAULT_PAGE_SIZE`), capped per endpoint — 1000, or 250 for `userChats` (that endpoint's real ceiling; asking for more would make the "was the page full" check misfire).
+- Stop rules, in order: an empty page always ends the walk; then `next_page_url` (a URL continues, an explicit `null` stops even when the page count disagrees); if that key is absent, `pagination.total`; and failing that, whether the page came back full — judged by the server's own `items_per_page` when it reports one. The last two exist so an endpoint that reports nothing doesn't truncate silently.
+
+The four `.api.*` list operations all share `limit`/`page` + `meta`/`pagination`, so a fifth walker is mostly picking the right item extractor: `itemsFromMap` for the map-plus-sort-array answers (`chats`/`chats_sort`, `messages`/`messages_sort`), `itemsFromArray` for the plain-array ones.
 
 ### Auto-generated `.api.*` methods
 

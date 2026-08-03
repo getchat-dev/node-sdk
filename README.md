@@ -17,7 +17,9 @@ There are two ways to call the API, and both go through the same code underneath
 
 - **[Ready-made methods](#rest-api)** — `sendMessage`, `getChats`, `createChat` and
   friends. They forgive loose input (a chat id as a plain string, `'yes'` instead
-  of `true`) and their signatures don't change between versions.
+  of `true`) and their signatures don't change between versions. Anything that
+  comes back in pages also has a [walker](#walking-a-whole-list) that reads every
+  page for you.
 - **[Generated methods](#the-generated-api-methods)** — one per endpoint, built from
   `openapi.yml`. Strict about input, and they cover everything, including what the
   ready-made methods don't reach.
@@ -214,11 +216,63 @@ You don't have to describe the answer: each method already knows what its endpoi
 returns, so autocomplete works out of the box. See
 [Reading answers](#reading-answers).
 
+### Walking a whole list
+
+Four things come back in pages: chats, a chat's messages, a chat's participants
+and a user's chats. Each has a companion that walks the pages for you, so you
+never have to count them yourself:
+
+| Walker | Instead of |
+| --- | --- |
+| [`iterateChats(query?)`](#iteratechats) | [`getChats`](#getchats) |
+| [`iterateMessagesFromChat(chatId, query?)`](#iteratemessagesfromchat) | [`getMessagesFromChat`](#getmessagesfromchat) |
+| [`iterateChatParticipants(chatId, query?)`](#iteratechatparticipants) | [`getChatParticipants`](#getchatparticipants) |
+| [`iterateUserChats(userId, query?)`](#iterateuserchats) | [`getUserChats`](#getuserchats) |
+
+They take the same filters as the one-page method and hand back a
+[`PageIterator`](#pageiterator), which you can read in three ways:
+
+```ts
+// one by one, across pages
+for await (const chat of emby.iterateChats({ type: 'group' })) {
+    console.log(chat.id, chat.title);
+}
+
+// everything at once
+const all = await emby.iterateChats({ type: 'group' }).toArray();
+
+// page by page, when you want the counts too
+for await (const page of emby.iterateChats().pages()) {
+    console.log(`page ${page.pagination.current}: ${page.items.length} of ${page.meta.total}`);
+}
+```
+
+- Pages of 100 unless you set `limit`. A bigger number is brought down to what
+  the endpoint serves — 1000, or 250 for a user's chats.
+- Requests happen as you read. Leave the loop and the next page is never asked
+  for; a failing page throws where you are reading.
+- `signal`, `timeout`, `retries` and `retryDelay` go in the same object and apply
+  to every page — see [Timeouts and retries](#timeouts-and-retries).
+- Each of the three ways starts a fresh walk from the first page, so you can keep
+  the walker around and read it more than once.
+- The walk ends when the server says there is no next page. If it says nothing
+  either way, an empty or short page ends it.
+- A long list is answered a page at a time, so `toArray()` on one holds
+  everything in memory. Loop over the items when the list may be big.
+- A list that changes while you walk shifts the pages under you — the usual
+  trade-off of page-by-page reading, not something the SDK can hide.
+
+The items are the same objects the one-page methods return:
+[`ChatResource`](#chatresource), [`MessageResource`](#messageresource),
+[`ParticipantResource`](#participantresource). A [`Page`](#page) also keeps the
+untouched answer in `raw`, which is where extras like the `users` list live.
+
 ### Chats
 
 | Method | What it does | You get back |
 | --- | --- | --- |
 | [`getChats(query?)`](#getchats) | List chats, with filters and pages | `{ status, chats, chats_sort, users?, meta, pagination }` |
+| [`iterateChats(query?)`](#iteratechats) | The same list, every page of it | [a walker](#walking-a-whole-list) over [`ChatResource`](#chatresource) |
 | [`getChatInfo(chatId)`](#getchatinfo) | Read one chat | `{ status, chat }` |
 | [`createChat(chat, participants?)`](#createchat) | Create a chat | `{ status, chat?, participants? }` |
 | [`updateChat(chatId, updates)`](#updatechat) | Change the title, the metadata or the id | `{ status, chat? }` |
@@ -250,6 +304,18 @@ for (const id of r.chats_sort) {
 - `chats` is an object of [`ChatResource`](#chatresource) keyed by chat id — but
   when nothing matched, the server sends an empty **array** `[]` instead. Walk
   `chats_sort` and you never have to think about it.
+
+#### `iterateChats`
+
+```ts
+for await (const chat of emby.iterateChats({ type: 'group', metadata: { dep: 'cs' } })) {
+    console.log(chat.id, chat.title);
+}
+```
+
+The same filters as [`getChats`](#getchats), every page of the result, in
+`chats_sort` order — see [Walking a whole list](#walking-a-whole-list). Pages of
+100 here unless you set `limit`, not the single chat `getChats` defaults to.
 
 #### `getChatInfo`
 
@@ -315,6 +381,7 @@ and drops the chat in the background, so it may take a moment to disappear.
 | Method | What it does | You get back |
 | --- | --- | --- |
 | [`getMessagesFromChat(chatId, query?, page?, limit?)`](#getmessagesfromchat) | List the messages of a chat | `{ status, messages, messages_sort, users?, meta, pagination }` |
+| [`iterateMessagesFromChat(chatId, query?)`](#iteratemessagesfromchat) | The same list, every page of it | [a walker](#walking-a-whole-list) over [`MessageResource`](#messageresource) |
 | [`sendMessage(chat, user, participants, message, extra?, buttons?)`](#sendmessage) | Post a message | `{ status, message_ids }` |
 | [`updateMessage(chatId, messageId, update, options?)`](#updatemessage) | Edit the text, the `extra` data or the buttons | `{ status, is_updated, message? }` |
 | [`deleteMessage(chatId, messageId)`](#deletemessage) | Delete a message | `{ status, is_updated }` |
@@ -350,6 +417,19 @@ for (const id of r.messages_sort) {
   that isn't `true`, including messages that never had the field at all.
 - Sorting (`order: 'asc' | 'desc'`) is only available through
   [`emby.api.chatMessages`](#the-generated-api-methods).
+
+#### `iterateMessagesFromChat`
+
+```ts
+for await (const m of emby.iterateMessagesFromChat('support-42', { with_users: true })) {
+    console.log(m.user_id, m.text);
+}
+```
+
+Every page of a chat's messages — see
+[Walking a whole list](#walking-a-whole-list). Note that here the page size lives
+in the query object (`{ limit: 200 }`), not in a positional argument, and that
+messages arriving while you walk shift the pages under you.
 
 #### `sendMessage`
 
@@ -433,6 +513,7 @@ else throws (the server would have quietly ignored it).
 | Method | What it does | You get back |
 | --- | --- | --- |
 | [`getChatParticipants(chatId, query?)`](#getchatparticipants) | List who is in a chat | `{ status, participants, meta, pagination }` |
+| [`iterateChatParticipants(chatId, query?)`](#iteratechatparticipants) | The same list, every page of it | [a walker](#walking-a-whole-list) over [`ParticipantResource`](#participantresource) |
 | [`addParticipantsToChat(chatId, participants)`](#addparticipantstochat) | Add people | `{ status }` |
 | [`removeParticipantFromChat(chatId, userId)`](#removeparticipantfromchat) | Remove one person | `{ status }` |
 
@@ -450,6 +531,15 @@ Without a query you get page 1 with 50 people; `limit` can't go above 1000. A
 [`ParticipantResource`](#participantresource) has only names and contacts — no
 metadata and no rights (read those with
 [`getParticipantRights`](#getparticipantrights)).
+
+#### `iterateChatParticipants`
+
+```ts
+const everyone = await emby.iterateChatParticipants('support-42').toArray();
+```
+
+Every page of a chat's participants — see
+[Walking a whole list](#walking-a-whole-list).
 
 #### `addParticipantsToChat`
 
@@ -528,6 +618,7 @@ Clears every override in one call, so the person is back to what their link says
 | [`updateUser(userId, updates)`](#updateuser) | Change their fields | `{ status, user? }` |
 | [`deleteUser(userId)`](#deleteuser) | Delete a person | nothing documented |
 | [`getUserChats(userId, query?)`](#getuserchats) | List the chats they are in | `{ chats, meta, pagination }` |
+| [`iterateUserChats(userId, query?)`](#iterateuserchats) | The same list, every page of it | [a walker](#walking-a-whole-list) over [`ChatResource`](#chatresource) |
 
 Types used here: [`User`](#user), [`GetUserChatsQuery`](#getuserchatsquery).
 
@@ -593,6 +684,18 @@ which says why; the limit is a setting for your workspace — see
 `tenantSetParticipantsListingSettings` in
 [the generated methods](#the-generated-api-methods). Supergroups and channels
 never include their participants.
+
+#### `iterateUserChats`
+
+```ts
+for await (const chat of emby.iterateUserChats('u-1', { order: 'desc' })) {
+    console.log(chat.title);
+}
+```
+
+Every chat a person is in — see [Walking a whole list](#walking-a-whole-list).
+This endpoint serves at most 250 at a time, so a bigger `limit` is brought down
+to that.
 
 ### Calling an endpoint by hand
 
@@ -978,7 +1081,36 @@ Two lists come back as an **object keyed by id** with a separate array of ids:
 [`getChats`](#getchats) gives `chats` and `chats_sort`,
 [`getMessagesFromChat`](#getmessagesfromchat) gives `messages` and
 `messages_sort`. Walk the array of ids — it is in the right order, and it saves
-you from the server's habit of sending an empty object as `[]`.
+you from the server's habit of sending an empty object as `[]`. Or let a
+[walker](#walking-a-whole-list) do it: it hands over plain items, in order,
+across pages.
+
+### `PageIterator`
+
+What the four [walkers](#walking-a-whole-list) hand back. Three ways to read one,
+and each starts a fresh walk from the first page:
+
+| How you read it | What you get |
+| --- | --- |
+| `for await (const item of it)` | the items one by one, across every page |
+| `it.pages()` | whole [`Page`](#page) objects, counts included |
+| `it.toArray()` | every item of every page in one array |
+
+Requests happen as you read, so leaving the loop early asks for nothing more.
+
+### `Page`
+
+One page, as [`PageIterator.pages()`](#pageiterator) hands it over.
+
+| Field | Type | What it is |
+| --- | --- | --- |
+| `items` | `T[]` | The items of this page, in the server's order |
+| `meta` | `{ total, output }` | How many there are in all, and how many are here |
+| `pagination` | see [Pages and totals](#pages-and-totals) | Where this page sits in the list |
+| `raw` | `unknown` | The untouched answer, for extras like the `users` list |
+
+`meta.output` falls back to the number of items read when the server leaves it
+out, which the participant list does.
 
 ### `ChatResource`
 
@@ -1088,9 +1220,10 @@ about `(retries + 1) × timeout` plus the waiting before it gives up. Pass a
 ### Changing it for one call
 
 `signal`, `timeout`, `retries` and `retryDelay` go right next to the input of any
-[generated method](#the-generated-api-methods), and as the seventh argument of
-[`requestApi`](#calling-an-endpoint-by-hand). They are taken out before the
-request is built, so they never reach the server.
+[generated method](#the-generated-api-methods), in the query object of a
+[walker](#walking-a-whole-list) (where they apply to every page), and as the
+seventh argument of [`requestApi`](#calling-an-endpoint-by-hand). They are taken
+out before the request is built, so they never reach the server.
 
 ```ts
 const ac = new AbortController();
@@ -1152,13 +1285,19 @@ import {
     type EmbyConfig,
     type ChatResource,
     type MessageButton,
+    type Page,
+    type PageIterator,
     type ParticipantRights,
+    type RequestControlOptions,
     type UserRights,
 } from '@emby-chat/node-sdk';
 ```
 
 - `import { Emby }` and `import Emby from …` both work.
 - `TimeoutError` is a class, so `instanceof` works with it.
+- [`PageIterator`](#pageiterator) and [`Page`](#page) describe what the
+  [walkers](#walking-a-whole-list) hand over, and `RequestControlOptions` the
+  per-call `signal` / `timeout` / `retries` / `retryDelay`.
 - The [generated methods](#the-generated-api-methods) build their types from
   `openapi.yml` and don't export them by name. If you need to name one, take it
   from the method: `Parameters<typeof emby.api.chatList>[0]` or

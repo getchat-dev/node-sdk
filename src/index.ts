@@ -48,9 +48,23 @@ type ChatParticipantsQuery = NonNullable<NonNullable<ChatParticipantsInput>['que
 type UserUpdateBody = UserUpdateInput['body'];
 type UserChatsQuery = NonNullable<NonNullable<UserChatsInput>['query']>;
 
+import type {
+    ChatResource as ApiChatResource,
+    MessageResource as ApiMessageResource,
+    ParticipantResource as ApiParticipantResource,
+} from './generated/schemas.js';
 import * as _ from './libs/helpers.js';
+import {
+    createPageIterator,
+    itemsFromArray,
+    itemsFromMap,
+    type PageIterator,
+    pageSize,
+    startPage,
+} from './libs/paginate.js';
 import processUserRights from './libs/processUserRights.js';
 import {
+    pickRequestControl,
     type RequestControlOptions,
     type ResolvedRequestOptions,
     resolveControlOverrides,
@@ -156,6 +170,11 @@ export interface UpdateMessageOptions {
 /** Convenience alias used by `sendMessage` — accepts the object shape or a string id. */
 export type ChatArg = ChatInput | string;
 export type MessageTextInput = string | { text: string; recipient_id?: string };
+
+/** Largest page the backend serves; it clamps anything bigger itself. */
+const MAX_PAGE_SIZE = 1000;
+/** …except a user's chats, where the ceiling is lower (see `limitParam` in openapi.yml). */
+const MAX_USER_CHATS_PAGE_SIZE = 250;
 
 export class Emby {
     clientId?: string;
@@ -558,7 +577,8 @@ export class Emby {
         return `${this.baseUrl}?${query}`;
     }
 
-    getChats<T = ChatListResponse>(queryParams: GetChatsQuery = {}): Promise<T> {
+    /** Shared by `getChats` and `iterateChats` — lenient input in, spec query out. */
+    private chatListQuery(queryParams: GetChatsQuery): ChatListQuery {
         if (!_.isPlainObject(queryParams)) {
             throw new Error('queryParams must be a plain object');
         }
@@ -599,7 +619,29 @@ export class Emby {
             query.metadata = queryParams.metadata as ChatListQuery['metadata'];
         }
 
-        return this.api.chatList<T>({ query: query as ChatListQuery });
+        return query as ChatListQuery;
+    }
+
+    getChats<T = ChatListResponse>(queryParams: GetChatsQuery = {}): Promise<T> {
+        return this.api.chatList<T>({ query: this.chatListQuery(queryParams) });
+    }
+
+    /**
+     * Walk the chat list page by page. Iterate it for the chats themselves, or
+     * call `.pages()` / `.toArray()` — see {@link PageIterator}. Pages of 100
+     * unless you set `limit`; filters and per-call options (`signal`, `timeout`,
+     * …) ride along with every request.
+     */
+    iterateChats(query: GetChatsQuery & RequestControlOptions = {}): PageIterator<ApiChatResource> {
+        const base = this.chatListQuery(query);
+        const control = pickRequestControl(query);
+
+        return createPageIterator<ApiChatResource>({
+            startPage: startPage(query.page),
+            limit: pageSize(query.limit, MAX_PAGE_SIZE),
+            fetch: (page, limit) => this.api.chatList({ query: { ...base, page, limit }, ...control }),
+            items: (response) => itemsFromMap<ApiChatResource>(response, 'chats', 'chats_sort'),
+        });
     }
 
     getChatInfo<T = ChatShowResponse>(id: string): Promise<T> {
@@ -620,6 +662,18 @@ export class Emby {
         page = 1,
         limit = 1,
     ): Promise<T> {
+        return this.api.chatMessages<T>({
+            path: { chat_id: chatId },
+            query: this.chatMessagesQuery(queryParams, page, limit),
+        });
+    }
+
+    /** Shared by `getMessagesFromChat` and `iterateMessagesFromChat`. */
+    private chatMessagesQuery(
+        queryParams: GetChatMessagesQuery | undefined,
+        page: number,
+        limit: number,
+    ): ChatMessagesQuery {
         const query: Partial<ChatMessagesQuery> = {
             page: Math.max(parseInt(String(page), 10), 1),
             limit: Math.min(parseInt(String(limit), 10), 1000),
@@ -657,7 +711,37 @@ export class Emby {
             }
         }
 
-        return this.api.chatMessages<T>({ path: { chat_id: chatId }, query: query as ChatMessagesQuery });
+        return query as ChatMessagesQuery;
+    }
+
+    /**
+     * Walk a chat's messages page by page — see {@link PageIterator}. Pages of
+     * 100 unless you set `limit` (here it belongs in the query object, not in a
+     * positional argument), and the filters go out with every request.
+     *
+     * Messages posted while you walk shift the pages under you; ask for a fixed
+     * window (`isDeleted`, `extra`, …) or read the newest page first if that
+     * matters.
+     */
+    iterateMessagesFromChat(
+        chatId: string,
+        query: GetChatMessagesQuery & RequestControlOptions = {},
+    ): PageIterator<ApiMessageResource> {
+        const limit = pageSize(query.limit, MAX_PAGE_SIZE);
+        const base = this.chatMessagesQuery(query, startPage(query.page), limit);
+        const control = pickRequestControl(query);
+
+        return createPageIterator<ApiMessageResource>({
+            startPage: startPage(query.page),
+            limit,
+            fetch: (page, lim) =>
+                this.api.chatMessages({
+                    path: { chat_id: chatId },
+                    query: { ...base, page, limit: lim },
+                    ...control,
+                }),
+            items: (response) => itemsFromMap<ApiMessageResource>(response, 'messages', 'messages_sort'),
+        });
     }
 
     sendMessage<T = ChatSendMessageResponse>(
@@ -883,6 +967,28 @@ export class Emby {
     }
 
     /**
+     * Walk a chat's participants page by page — see {@link PageIterator}.
+     * Pages of 100 unless you set `limit`.
+     */
+    iterateChatParticipants(
+        chatId: string,
+        query: PaginationQuery & RequestControlOptions = {},
+    ): PageIterator<ApiParticipantResource> {
+        if (!_.isString(chatId)) {
+            throw new Error("chat id isn't passed");
+        }
+        const control = pickRequestControl(query);
+
+        return createPageIterator<ApiParticipantResource>({
+            startPage: startPage(query.page),
+            limit: pageSize(query.limit, MAX_PAGE_SIZE),
+            fetch: (page, limit) =>
+                this.api.chatParticipants({ path: { chat_id: chatId }, query: { page, limit }, ...control }),
+            items: (response) => itemsFromArray<ApiParticipantResource>(response, 'participants'),
+        });
+    }
+
+    /**
      * Remove a single participant from a chat by user id.
      */
     removeParticipantFromChat<T = ChatDeleteParticipantsResponse>(chatId: string, userId: string): Promise<T> {
@@ -1025,6 +1131,14 @@ export class Emby {
         if (!_.isString(userId)) {
             throw new Error("user id isn't passed");
         }
+        return this.api.userChats<T>({
+            path: { user_id: userId },
+            query: this.userChatsQuery(query),
+        });
+    }
+
+    /** Shared by `getUserChats` and `iterateUserChats`. */
+    private userChatsQuery(query: GetUserChatsQuery): UserChatsQuery {
         const q: Partial<UserChatsQuery> = {
             page: Math.max(parseInt(String(query.page), 10) || 1, 1),
             limit: Math.min(parseInt(String(query.limit), 10) || 50, 1000),
@@ -1043,13 +1157,36 @@ export class Emby {
         if (_.isBoolean(query.with_last_message)) {
             q.with_last_message = query.with_last_message ? 1 : 0;
         }
-        return this.api.userChats<T>({
-            path: { user_id: userId },
-            query: q as UserChatsQuery,
+        return q as UserChatsQuery;
+    }
+
+    /**
+     * Walk the chats a user belongs to, page by page — see {@link PageIterator}.
+     * Pages of 100 unless you set `limit`; this endpoint serves at most 250 at a
+     * time, so a bigger number is brought down to that.
+     */
+    iterateUserChats(
+        userId: string,
+        query: GetUserChatsQuery & RequestControlOptions = {},
+    ): PageIterator<ApiChatResource> {
+        if (!_.isString(userId)) {
+            throw new Error("user id isn't passed");
+        }
+        const base = this.userChatsQuery(query);
+        const control = pickRequestControl(query);
+
+        return createPageIterator<ApiChatResource>({
+            startPage: startPage(query.page),
+            limit: pageSize(query.limit, MAX_USER_CHATS_PAGE_SIZE),
+            fetch: (page, limit) =>
+                this.api.userChats({ path: { user_id: userId }, query: { ...base, page, limit }, ...control }),
+            items: (response) => itemsFromArray<ApiChatResource>(response, 'chats'),
         });
     }
 }
 
 export default Emby;
+export type { Page, PageIterator } from './libs/paginate.js';
+export type { RequestControlOptions } from './libs/requestOptions.js';
 export { TimeoutError } from './libs/requestOptions.js';
 export * from './types.js';
