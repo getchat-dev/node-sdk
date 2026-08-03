@@ -182,7 +182,7 @@ When you change `openapi.yml`, run `npm run generate` then `npm test` then `npm 
 
 ### Changing runtime behavior
 
-Edit `src/index.ts` or `src/libs/*.ts`. Run `npm test` — must stay green. `npm run build` must succeed. For a release, bump version in `package.json`; `prepublishOnly` runs the build.
+Edit `src/index.ts` or `src/libs/*.ts`. Run `npm test` — must stay green. `npm run build` must succeed. For a release, bump version in `package.json`; `prepack` runs the build (so `npm pack` and `npm publish` both produce a freshly built `dist/`).
 
 ### Patching the spec against backend reality
 
