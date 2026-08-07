@@ -167,6 +167,17 @@ export interface UpdateMessageOptions {
     returnMessage?: boolean;
 }
 
+export interface SendMessageOptions {
+    /**
+     * Post even when the sender is muted in this chat (`rights.send_messages` is
+     * `false`), which the backend otherwise answers with a 403. Their stored
+     * rights are left alone — this is a one-off override for this call.
+     * Loose truthy values (`'yes'`, `'on'`, `1`, …) are accepted; anything falsy
+     * is simply left out of the request, which is what the backend defaults to.
+     */
+    force?: boolean;
+}
+
 /** Convenience alias used by `sendMessage` — accepts the object shape or a string id. */
 export type ChatArg = ChatInput | string;
 export type MessageTextInput = string | { text: string; recipient_id?: string };
@@ -744,6 +755,10 @@ export class Emby {
         });
     }
 
+    /**
+     * Post a message. The seventh argument carries what isn't about the message
+     * itself — today that is `force`, see {@link SendMessageOptions}.
+     */
     sendMessage<T = ChatSendMessageResponse>(
         chat: ChatArg,
         user: User,
@@ -751,6 +766,7 @@ export class Emby {
         message: MessageTextInput,
         extra: ExtraMap = {},
         buttons: MessageButton[] = [],
+        { force = false }: SendMessageOptions = {},
     ): Promise<T> {
         // Build the message item first — text/recipient_id then extras.
         const messageData: { text?: string; recipient_id?: string; extra?: ExtraMap; buttons?: MessageButton[] } = {};
@@ -803,6 +819,9 @@ export class Emby {
         if (_.isFilledArray(participants)) {
             body.participants = (participants as Participant[]).map(normalizeParticipant);
         }
+        // Only send the flag when it means something — `false` is the backend's own
+        // default, and the spec wants a real boolean, not the loose input we accept.
+        if (_.isTRUE(force)) body.force = true;
 
         return this.api.chatSendMessage<T>({
             path: { chat_id: chatId },

@@ -35,6 +35,7 @@ import type {
     Page,
     PageIterator,
     RequestControlOptions,
+    SendMessageOptions,
     UpdateMessageInput,
     UpdateMessageOptions,
 } from '../../src/index.js';
@@ -85,9 +86,12 @@ export type _sigSendMessage = Expect<
             message: MessageTextInput,
             extra?: ExtraMap,
             buttons?: MessageButton[],
+            options?: SendMessageOptions,
         ]
     >
 >;
+// `force` is the only thing in there for now, and it is optional.
+export type _sendMessageOptions = Expect<Equal<SendMessageOptions, { force?: boolean }>>;
 export type _sigUpdateMessage = Expect<
     Equal<
         Parameters<Emby['updateMessage']>,

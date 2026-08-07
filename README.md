@@ -382,7 +382,7 @@ and drops the chat in the background, so it may take a moment to disappear.
 | --- | --- | --- |
 | [`getMessagesFromChat(chatId, query?, page?, limit?)`](#getmessagesfromchat) | List the messages of a chat | `{ status, messages, messages_sort, users?, meta, pagination }` |
 | [`iterateMessagesFromChat(chatId, query?)`](#iteratemessagesfromchat) | The same list, every page of it | [a walker](#walking-a-whole-list) over [`MessageResource`](#messageresource) |
-| [`sendMessage(chat, user, participants, message, extra?, buttons?)`](#sendmessage) | Post a message | `{ status, message_ids }` |
+| [`sendMessage(chat, user, participants, message, extra?, buttons?, options?)`](#sendmessage) | Post a message | `{ status, message_ids }` |
 | [`updateMessage(chatId, messageId, update, options?)`](#updatemessage) | Edit the text, the `extra` data or the buttons | `{ status, is_updated, message? }` |
 | [`deleteMessage(chatId, messageId)`](#deletemessage) | Delete a message | `{ status, is_updated }` |
 | [`sendTyping(chatId, userId, time?)`](#sendtyping) | Show that someone is typing | `{ status }` |
@@ -390,6 +390,7 @@ and drops the chat in the background, so it may take a moment to disappear.
 Types used here: [`GetChatMessagesQuery`](#getchatmessagesquery),
 [`ChatInput`](#chatinput), [`User`](#user), [`Participant`](#participant),
 [`ExtraMap`](#extramap-and-stringmap), [`MessageButton`](#messagebutton),
+[`SendMessageOptions`](#sendmessageoptions),
 [`UpdateMessageInput`](#updatemessageinput),
 [`UpdateMessageOptions`](#updatemessageoptions).
 
@@ -461,10 +462,23 @@ console.log(r.message_ids);
 - Limits: 4096 characters of text, 100 keys of extra data, 20
   [buttons](#messagebutton). A `recipient_id`, if you set one, has to be a user
   who already exists.
-- An author who is muted in this chat is refused (403). To post anyway you need
-  `force: true`, which only
-  [`emby.api.chatSendMessage`](#the-generated-api-methods) has.
+- An author who is muted in this chat is refused (403). Pass `force: true` in the
+  last argument to post anyway — see [`SendMessageOptions`](#sendmessageoptions).
 - You get back only the **ids** of the new messages, not the messages themselves.
+
+Posting on behalf of someone who is muted in that chat:
+
+```ts
+await emby.sendMessage(
+    'support-42',
+    { id: 'u-2', name: 'Bob' },
+    [],
+    'a service note',
+    {},
+    [],
+    { force: true },
+);
+```
 
 #### `updateMessage`
 
@@ -815,6 +829,7 @@ code.
 | [`Participant`](#participant) | Somebody taking part in a chat | [`createChat`](#createchat), [`addParticipantsToChat`](#addparticipantstochat), [`sendMessage`](#sendmessage) |
 | [`ParticipantRights`](#participantrights) | Rights for one chat | [`updateParticipantRights`](#updateparticipantrights), `Participant.rights` |
 | [`MessageButton`](#messagebutton) | A button under a message | [`sendMessage`](#sendmessage), [`updateMessage`](#updatemessage) |
+| [`SendMessageOptions`](#sendmessageoptions) | Everything about the call that isn't the message | [`sendMessage`](#sendmessage) |
 | [`UpdateMessageInput`](#updatemessageinput) | What to change about a message | [`updateMessage`](#updatemessage) |
 | [`UpdateMessageOptions`](#updatemessageoptions) | How to apply the change | [`updateMessage`](#updatemessage) |
 | [`GetChatsQuery`](#getchatsquery) | Filters and pages for the chat list | [`getChats`](#getchats) |
@@ -993,6 +1008,23 @@ A person, as the API sees them.
 | `style` | `'primary' \| 'positive' \| 'negative' \| 'neutral'` | Its colour |
 
 Up to 20 buttons on a message.
+
+### `SendMessageOptions`
+
+The last argument of [`sendMessage`](#sendmessage) — what the call needs that the
+message itself doesn't.
+
+| Field | Type | Default | What it is |
+| --- | --- | --- | --- |
+| `force` | `boolean` | `false` | Post even when the author is muted in this chat, instead of being refused with 403 |
+
+`force` is a one-off override: the person's [rights](#rights-in-one-chat) stay as
+they were, and the next message without the flag is refused again.
+
+The type is `boolean`. From plain JavaScript the usual loose spellings work as
+well — `'1'`, `'on'`, `'yes'`, `'true'`; anything else, truthy or not, is left
+out of the request, which is what the server does by default. In TypeScript
+those spellings need a cast, so a plain `true` is easier.
 
 ### `UpdateMessageInput`
 

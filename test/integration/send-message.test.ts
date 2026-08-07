@@ -90,6 +90,54 @@ describe('Emby.sendMessage()', () => {
         assert.deepEqual(messages[0].extra, { source: 'cli', version: '1.12' });
     });
 
+    // `force: true` posts even when this sender is muted in the chat
+    // (`rights.send_messages: false`), which otherwise answers 403.
+    test('force: true rides the body', async () => {
+        server.respondWith(loadFixture('chats/send-message/success'));
+
+        await sdk.sendMessage('c1', USER, [], 'hi', {}, [], { force: true });
+
+        assert.equal((server.lastRequest!.body as JsonBody).force, true);
+    });
+
+    test('no options: `force` is left out of the body', async () => {
+        server.respondWith(loadFixture('chats/send-message/success'));
+
+        await sdk.sendMessage('c1', USER, [], 'hi');
+
+        assert.ok(!('force' in (server.lastRequest!.body as JsonBody)));
+    });
+
+    test('force: false is left out too — it is what the server does anyway', async () => {
+        server.respondWith(loadFixture('chats/send-message/success'));
+
+        await sdk.sendMessage('c1', USER, [], 'hi', {}, [], { force: false });
+
+        assert.ok(!('force' in (server.lastRequest!.body as JsonBody)));
+    });
+
+    test('a loose truthy force is sent as a real boolean', async () => {
+        server.respondWith(loadFixture('chats/send-message/success'));
+
+        await sdk.sendMessage('c1', USER, [], 'hi', {}, [], { force: 'yes' as unknown as boolean });
+
+        assert.equal((server.lastRequest!.body as JsonBody).force, true);
+    });
+
+    test('a loose falsy force is left out', async () => {
+        server.respondWith(loadFixture('chats/send-message/success'));
+
+        await sdk.sendMessage('c1', USER, [], 'hi', {}, [], { force: 0 as unknown as boolean });
+
+        assert.ok(!('force' in (server.lastRequest!.body as JsonBody)));
+    });
+
+    test('force does not swallow the 403 a muted sender gets without it', async () => {
+        server.respondWith({ status: 403, body: { status: false, message: 'user is muted' } });
+
+        await assert.rejects(sdk.sendMessage('c1', USER, [], 'hi'), (err) => (err as HttpErr).status === 403);
+    });
+
     test('participants are normalized (is_bot default false, bogus keys dropped)', async () => {
         server.respondWith(loadFixture('chats/send-message/success'));
 

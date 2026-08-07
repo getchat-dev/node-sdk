@@ -102,6 +102,27 @@ describe('live: participant rights (get/update round-trip)', { skip: SKIP_REASON
         assert.ok(rejected || !created, 'a muted participant (send_messages: false) still managed to post a message');
     });
 
+    test('force: true gets that same muted member through', async (t) => {
+        // Same member, still muted (the flip back to `true` happens in the next
+        // test). The flag is a one-off override, so this must post — and the mute
+        // must stay put, which the read-back below checks.
+        const sent = await sdk.sendMessage<{ message_ids?: string[] }>(
+            chatId,
+            { id: memberId, name: 'Member' },
+            [],
+            'posted with force',
+            {},
+            [],
+            { force: true },
+        );
+        t.diagnostic(`force send: message_ids=${JSON.stringify(sent.message_ids)}`);
+        assert.ok(sent.message_ids?.length, 'force: true did not get a muted member’s message through');
+
+        const got = await sdk.getParticipantRights<AnyResp>(chatId, memberId);
+        const rights = (got.rights ?? {}) as Record<string, unknown>;
+        assert.equal(String(rights.send_messages), String(mutedValue), 'force changed the stored mute — it must not');
+    });
+
     test('flipping a right changes the read-back value', async (t) => {
         const upd = await sdk.updateParticipantRights(chatId, memberId, { send_messages: true });
         assert.notEqual(upd.status, false);
