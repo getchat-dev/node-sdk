@@ -1,3 +1,15 @@
+// The four page-walkers against a real HTTP server, over real requests.
+//
+// What this file is here to catch: what actually goes out (which page, which
+// size, which filters, and that per-call options never leak into the query
+// string), and when the walking stops. The stop rules are stubbed out in
+// test/unit/paginate.test.ts; here they run against answers shaped exactly like
+// the backend's, including its habit of sending an empty list as `[]`.
+//
+// Every test queues its own answers. The mock server replies 599 to a request
+// it has no answer for, so a walk that asks once too often fails loudly instead
+// of quietly passing.
+
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, test } from 'node:test';
 import type { Emby } from '../../src/index';

@@ -169,11 +169,15 @@ export interface UpdateMessageOptions {
 
 export interface SendMessageOptions {
     /**
-     * Post even when the sender is muted in this chat (`rights.send_messages` is
-     * `false`), which the backend otherwise answers with a 403. Their stored
-     * rights are left alone — this is a one-off override for this call.
-     * Loose truthy values (`'yes'`, `'on'`, `1`, …) are accepted; anything falsy
-     * is simply left out of the request, which is what the backend defaults to.
+     * Post even when this sender is muted in the chat (`rights.send_messages` is
+     * `false`), which the backend otherwise refuses with a 403. A one-off
+     * override: their stored rights are untouched, so the next message sent
+     * without the flag is refused again.
+     *
+     * The type is `boolean`. A plain-JS caller may also pass the strings this
+     * SDK reads as true everywhere else — `'1'`, `'on'`, `'yes'`, `'true'`.
+     * Anything else is left out of the request, including a truthy value that
+     * isn't one of those; leaving it out is what the backend defaults to.
      */
     force?: boolean;
 }
@@ -182,9 +186,12 @@ export interface SendMessageOptions {
 export type ChatArg = ChatInput | string;
 export type MessageTextInput = string | { text: string; recipient_id?: string };
 
-/** Largest page the backend serves; it clamps anything bigger itself. */
+// Page-size ceilings, from `limitParam` in openapi.yml. The backend clamps a
+// bigger `limit` on its own, so these exist for the walkers: one of their
+// stop rules asks "did this page come back full?", and a request for more than
+// the backend serves would make every page look short and end the walk early.
 const MAX_PAGE_SIZE = 1000;
-/** …except a user's chats, where the ceiling is lower (see `limitParam` in openapi.yml). */
+/** A user's chats is the one endpoint with a lower ceiling. */
 const MAX_USER_CHATS_PAGE_SIZE = 250;
 
 export class Emby {
@@ -588,7 +595,13 @@ export class Emby {
         return `${this.baseUrl}?${query}`;
     }
 
-    /** Shared by `getChats` and `iterateChats` — lenient input in, spec query out. */
+    /**
+     * Turns the lenient public query into the strict one the spec wants.
+     *
+     * Lives apart from `getChats` because `iterateChats` needs the same
+     * coercions — a filter added in one place must not behave differently
+     * depending on which of the two a caller reached for.
+     */
     private chatListQuery(queryParams: GetChatsQuery): ChatListQuery {
         if (!_.isPlainObject(queryParams)) {
             throw new Error('queryParams must be a plain object');
@@ -638,10 +651,14 @@ export class Emby {
     }
 
     /**
-     * Walk the chat list page by page. Iterate it for the chats themselves, or
-     * call `.pages()` / `.toArray()` — see {@link PageIterator}. Pages of 100
-     * unless you set `limit`; filters and per-call options (`signal`, `timeout`,
-     * …) ride along with every request.
+     * Walk the whole chat list, not just one page — see {@link PageIterator} for
+     * the three ways to read one.
+     *
+     * Takes the same query as {@link getChats}, so filters and per-call options
+     * (`signal`, `timeout`, …) go out with every page. `limit` sets the page
+     * size, kept inside what the endpoint serves ({@link MAX_PAGE_SIZE});
+     * without it the walker's own default applies rather than the single chat
+     * `getChats` asks for.
      */
     iterateChats(query: GetChatsQuery & RequestControlOptions = {}): PageIterator<ApiChatResource> {
         const base = this.chatListQuery(query);
@@ -679,7 +696,11 @@ export class Emby {
         });
     }
 
-    /** Shared by `getMessagesFromChat` and `iterateMessagesFromChat`. */
+    /**
+     * Same reason as {@link chatListQuery}: `getMessagesFromChat` and
+     * `iterateMessagesFromChat` must coerce a filter identically, so the
+     * coercion lives in one place.
+     */
     private chatMessagesQuery(
         queryParams: GetChatMessagesQuery | undefined,
         page: number,
@@ -726,13 +747,14 @@ export class Emby {
     }
 
     /**
-     * Walk a chat's messages page by page — see {@link PageIterator}. Pages of
-     * 100 unless you set `limit` (here it belongs in the query object, not in a
-     * positional argument), and the filters go out with every request.
+     * Walk all of a chat's messages — see {@link PageIterator}.
+     *
+     * Unlike {@link getMessagesFromChat}, paging belongs in the query object
+     * here: the positional `page` / `limit` of that method would have nothing to
+     * mean across a walk.
      *
      * Messages posted while you walk shift the pages under you; ask for a fixed
-     * window (`isDeleted`, `extra`, …) or read the newest page first if that
-     * matters.
+     * window (`isDeleted`, `extra`, …) if that matters.
      */
     iterateMessagesFromChat(
         chatId: string,
@@ -819,8 +841,8 @@ export class Emby {
         if (_.isFilledArray(participants)) {
             body.participants = (participants as Participant[]).map(normalizeParticipant);
         }
-        // Only send the flag when it means something — `false` is the backend's own
-        // default, and the spec wants a real boolean, not the loose input we accept.
+        // Sent only when it changes something: `false` is the backend's own default,
+        // and the spec wants a real boolean rather than the loose input we accept.
         if (_.isTRUE(force)) body.force = true;
 
         return this.api.chatSendMessage<T>({
@@ -985,10 +1007,7 @@ export class Emby {
         });
     }
 
-    /**
-     * Walk a chat's participants page by page — see {@link PageIterator}.
-     * Pages of 100 unless you set `limit`.
-     */
+    /** Walk everyone in a chat, not just one page — see {@link PageIterator}. */
     iterateChatParticipants(
         chatId: string,
         query: PaginationQuery & RequestControlOptions = {},
@@ -1156,7 +1175,7 @@ export class Emby {
         });
     }
 
-    /** Shared by `getUserChats` and `iterateUserChats`. */
+    /** Shared with `iterateUserChats`, for the reason in {@link chatListQuery}. */
     private userChatsQuery(query: GetUserChatsQuery): UserChatsQuery {
         const q: Partial<UserChatsQuery> = {
             page: Math.max(parseInt(String(query.page), 10) || 1, 1),
@@ -1180,9 +1199,9 @@ export class Emby {
     }
 
     /**
-     * Walk the chats a user belongs to, page by page — see {@link PageIterator}.
-     * Pages of 100 unless you set `limit`; this endpoint serves at most 250 at a
-     * time, so a bigger number is brought down to that.
+     * Walk every chat a user belongs to — see {@link PageIterator}. `limit` is
+     * kept inside what this endpoint serves ({@link MAX_USER_CHATS_PAGE_SIZE}),
+     * which is lower than the ceiling the other three lists share.
      */
     iterateUserChats(
         userId: string,

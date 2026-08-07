@@ -1,3 +1,12 @@
+// Unit tests for the page-walking helpers behind `iterateChats` and friends.
+//
+// These pin the parts that have no HTTP in them: how items are read out of the
+// two answer shapes, and — the reason this file exists — exactly when the walk
+// decides there is another page. That decision has four rules that fall through
+// to each other, and driving them through a real endpoint would mean building a
+// server for each; here a stub is three lines. The over-the-wire behaviour is
+// covered in test/integration/pagination.test.ts.
+
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
@@ -99,7 +108,14 @@ describe('libs/paginate', () => {
     });
 
     describe('createPageIterator', () => {
-        /** A list endpoint that hands back `pages` pages of `perPage` items each. */
+        /**
+         * A stub endpoint serving the given pages in order, and recording which
+         * page numbers were asked for — `asked` is what most of these tests
+         * assert on, since the point is where the walk stops, not what it read.
+         *
+         * Asking for a page that isn't there fails the test rather than
+         * returning nothing: a walk that runs off the end must be loud.
+         */
         const fake = (pages: Array<{ items: number[]; pagination: PageInfo }>) => {
             const asked: number[] = [];
             const it = createPageIterator<number>({

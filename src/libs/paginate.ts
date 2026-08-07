@@ -159,7 +159,10 @@ export function createPageIterator<T>(source: PageSource<T>): PageIterator<T> {
 /** The page to start from: at least 1, and 1 when nothing sensible was passed. */
 export const startPage = (value: unknown): number => Math.max(parseInt(String(value), 10) || 1, 1);
 
-/** How many items to ask for: the caller's number, kept inside 1…`max`. */
+/**
+ * How many items to ask for: the caller's number, kept inside 1…`max`, or
+ * {@link DEFAULT_PAGE_SIZE} when they name none.
+ */
 export const pageSize = (value: unknown, max: number): number => {
     const n = parseInt(String(value), 10);
     if (!Number.isFinite(n) || n < 1) return Math.min(DEFAULT_PAGE_SIZE, max);
