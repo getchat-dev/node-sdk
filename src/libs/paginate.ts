@@ -75,7 +75,9 @@ function pageMeta(response: unknown, itemCount: number): Page<unknown>['meta'] {
 }
 
 /**
- * Is there another page after this one?
+ * Is there another page after this one? Asked only about a page the server
+ * served under the number we asked for — `createPageIterator` catches a clamped
+ * one before this runs.
  *
  * `next_page_url` is the clearest signal, so it wins: a URL means "keep going",
  * an explicit `null` means "that was the last one" even when the page count
@@ -129,13 +131,26 @@ export function createPageIterator<T>(source: PageSource<T>): PageIterator<T> {
 
         for (;;) {
             const raw = await source.fetch(page, source.limit);
-            const items = source.items(raw);
             const info = pageInfo(raw);
+
+            // `current` is the page the server actually served. A different number
+            // means the one we asked for was past the end and got clamped back, so
+            // this page has been handed over already — stop rather than repeat it,
+            // and rather than ask again for a page that will be clamped too.
+            // (`0` is what the backend reports when nothing matched; not a clamp.)
+            const served = asCount(info.current);
+            if (served !== undefined && served > 0 && served !== page) return;
+
+            const items = source.items(raw);
+
+            // An empty page ends the walk whatever the server says next — otherwise
+            // a stale `next_page_url` would keep us going forever. The first page is
+            // still handed over when empty, because its counts answer "nothing
+            // matched"; an empty page at the end is just noise.
+            if (items.length === 0 && page !== source.startPage) return;
 
             yield { items, meta: pageMeta(raw, items.length), pagination: info, raw };
 
-            // An empty page ends the walk whatever the server says next — otherwise
-            // a stale `next_page_url` would keep us going forever.
             if (items.length === 0) return;
             if (!hasMorePages(info, page, items.length, source.limit)) return;
 

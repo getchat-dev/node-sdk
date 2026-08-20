@@ -596,6 +596,17 @@ export class Emby {
     }
 
     /**
+     * The per-call options out of a walker's query, checked right here rather
+     * than on the first page: a walker built with `retries: 99` should complain
+     * at the line that set it, not deep inside somebody's loop.
+     */
+    private walkControl(query: RequestControlOptions): RequestControlOptions {
+        const control = pickRequestControl(query);
+        resolveControlOverrides(control);
+        return control;
+    }
+
+    /**
      * Turns the lenient public query into the strict one the spec wants.
      *
      * Lives apart from `getChats` because `iterateChats` needs the same
@@ -662,7 +673,7 @@ export class Emby {
      */
     iterateChats(query: GetChatsQuery & RequestControlOptions = {}): PageIterator<ApiChatResource> {
         const base = this.chatListQuery(query);
-        const control = pickRequestControl(query);
+        const control = this.walkControl(query);
 
         return createPageIterator<ApiChatResource>({
             startPage: startPage(query.page),
@@ -760,12 +771,13 @@ export class Emby {
         chatId: string,
         query: GetChatMessagesQuery & RequestControlOptions = {},
     ): PageIterator<ApiMessageResource> {
+        const start = startPage(query.page);
         const limit = pageSize(query.limit, MAX_PAGE_SIZE);
-        const base = this.chatMessagesQuery(query, startPage(query.page), limit);
-        const control = pickRequestControl(query);
+        const base = this.chatMessagesQuery(query, start, limit);
+        const control = this.walkControl(query);
 
         return createPageIterator<ApiMessageResource>({
-            startPage: startPage(query.page),
+            startPage: start,
             limit,
             fetch: (page, lim) =>
                 this.api.chatMessages({
@@ -1015,7 +1027,7 @@ export class Emby {
         if (!_.isString(chatId)) {
             throw new Error("chat id isn't passed");
         }
-        const control = pickRequestControl(query);
+        const control = this.walkControl(query);
 
         return createPageIterator<ApiParticipantResource>({
             startPage: startPage(query.page),
@@ -1211,7 +1223,7 @@ export class Emby {
             throw new Error("user id isn't passed");
         }
         const base = this.userChatsQuery(query);
-        const control = pickRequestControl(query);
+        const control = this.walkControl(query);
 
         return createPageIterator<ApiChatResource>({
             startPage: startPage(query.page),

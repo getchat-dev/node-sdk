@@ -252,11 +252,14 @@ for await (const page of emby.iterateChats().pages()) {
 - Requests happen as you read. Leave the loop and the next page is never asked
   for; a failing page throws where you are reading.
 - `signal`, `timeout`, `retries` and `retryDelay` go in the same object and apply
-  to every page — see [Timeouts and retries](#timeouts-and-retries).
+  to every page — see [Timeouts and retries](#timeouts-and-retries). A number
+  outside its bounds throws where you build the walker, not on the first page.
 - Each of the three ways starts a fresh walk from the first page, so you can keep
   the walker around and read it more than once.
 - The walk ends when the server says there is no next page. If it says nothing
-  either way, an empty or short page ends it.
+  either way, an empty or short page ends it — and so does a page handed back
+  under a different number than the one asked for, which is what the server does
+  once you run past the last page.
 - A long list is answered a page at a time, so `toArray()` on one holds
   everything in memory. Loop over the items when the list may be big.
 - A list that changes while you walk shifts the pages under you — the usual
@@ -1129,6 +1132,9 @@ and each starts a fresh walk from the first page:
 | `it.toArray()` | every item of every page in one array |
 
 Requests happen as you read, so leaving the loop early asks for nothing more.
+
+An empty page reaches you only when it is the first one — there its counts are
+the answer to "how many matched". A walk never ends by handing you an empty page.
 
 ### `Page`
 

@@ -144,6 +144,23 @@ describe('pagination helpers', () => {
             assert.equal(server.requests.length, 0);
         });
 
+        test('a bad per-call number is refused where the walker is built', () => {
+            // 15 is over the cap of 10. Finding out on the first page read would
+            // point at the loop instead of at the line that set it.
+            assert.throws(() => sdk.iterateChats({ retries: 15 }));
+            assert.equal(server.requests.length, 0);
+        });
+
+        test('nothing is asked for until you start reading', async () => {
+            const it = sdk.iterateChats();
+            assert.equal(server.requests.length, 0);
+
+            server.respondWith(chatsPage(['c1'], {}));
+            await it.toArray();
+
+            assert.equal(server.requests.length, 1);
+        });
+
         test('per-call options stay out of the query string', async () => {
             server.respondWith(chatsPage(['c1'], {}));
 
@@ -254,8 +271,8 @@ describe('pagination helpers', () => {
 
         test('with neither signal, keeps going while pages come back full', async () => {
             const opts = { next: 'omit' as const, noTotal: true, limit: 2 };
-            server.respondWith(chatsPage(['c1', 'c2'], opts)); // full → ask again
-            server.respondWith(chatsPage(['c3'], opts)); // short → last one
+            server.respondWith(chatsPage(['c1', 'c2'], { ...opts, page: 1 })); // full → ask again
+            server.respondWith(chatsPage(['c3'], { ...opts, page: 2 })); // short → last one
 
             const ids = (await sdk.iterateChats({ limit: 2 }).toArray()).map((c) => c.id);
 
@@ -267,12 +284,38 @@ describe('pagination helpers', () => {
             // The server may hand back smaller pages than requested. Judging fullness
             // by our own `limit` would end the walk after the first page.
             const opts = { next: 'omit' as const, noTotal: true, limit: 1 };
-            server.respondWith(chatsPage(['c1'], opts));
-            server.respondWith(chatsPage([], opts));
+            server.respondWith(chatsPage(['c1'], { ...opts, page: 1 }));
+            server.respondWith(chatsPage([], { ...opts, page: 2 }));
 
             const ids = (await sdk.iterateChats({ limit: 2 }).toArray()).map((c) => c.id);
 
             assert.deepEqual(ids, ['c1']);
+            assert.equal(server.requests.length, 2);
+        });
+
+        test('a page the server clamped back ends the walk, and is not handed over twice', async () => {
+            // openapi.yml: a page past the last one is clamped to the last page. With
+            // no next_page_url and no page count to go by, the full first page would
+            // otherwise make the walk ask again — and again, forever, handing the
+            // same chats out on every lap.
+            const clamped = { next: 'omit' as const, noTotal: true, limit: 2, page: 1 };
+            server.respondWith(chatsPage(['c1', 'c2'], clamped));
+            server.respondWith(chatsPage(['c1', 'c2'], clamped)); // page 2 asked, page 1 served
+
+            const ids = (await sdk.iterateChats({ limit: 2 }).toArray()).map((c) => c.id);
+
+            assert.deepEqual(ids, ['c1', 'c2']);
+            assert.equal(server.requests.length, 2);
+        });
+
+        test('pages(): an empty page at the end is not handed over', async () => {
+            server.respondWith(chatsPage(['c1'], { page: 1, pages: 5 }));
+            server.respondWith(chatsPage([], { page: 2, pages: 5 }));
+
+            const sizes = [];
+            for await (const p of sdk.iterateChats().pages()) sizes.push(p.items.length);
+
+            assert.deepEqual(sizes, [1]);
             assert.equal(server.requests.length, 2);
         });
 
@@ -430,6 +473,14 @@ describe('pagination helpers', () => {
             }
         });
 
+        test('the page size is capped at what the endpoint serves', async () => {
+            server.respondWith(messagesPage(['m1'], {}));
+
+            await sdk.iterateMessagesFromChat('c1', { limit: 5000 }).toArray();
+
+            assert.equal(paging(server)[0].limit, '1000');
+        });
+
         test('filters are coerced the same way as in getMessagesFromChat', async () => {
             server.respondWith(messagesPage(['m1'], { page: 1, pages: 2 }));
             server.respondWith(messagesPage(['m2'], { page: 2, pages: 2 }));
@@ -448,6 +499,14 @@ describe('pagination helpers', () => {
         test('a missing chat id is refused right away', () => {
             assert.throws(() => sdk.iterateChatParticipants(undefined as unknown as string), /chat id isn't passed/);
             assert.equal(server.requests.length, 0);
+        });
+
+        test('the page size is capped at what the endpoint serves', async () => {
+            server.respondWith(participantsPage(['u1'], {}));
+
+            await sdk.iterateChatParticipants('c1', { limit: 5000 }).toArray();
+
+            assert.equal(paging(server)[0].limit, '1000');
         });
 
         test('walks the plain array list', async () => {

@@ -179,6 +179,63 @@ describe('libs/paginate', () => {
             assert.deepEqual(asked, [1, 2]);
         });
 
+        test('a page the server served under another number ends the walk', async () => {
+            // `pagination.current` is the page the server actually served. When it
+            // disagrees with the one we asked for, our page ran past the end and was
+            // clamped back — everything on it has been handed over already.
+            const asked: number[] = [];
+            const it = createPageIterator<number>({
+                startPage: 1,
+                limit: 2,
+                fetch: (page) => {
+                    asked.push(page);
+                    // A walk that doesn't notice the clamp never ends, so cut it off
+                    // here — the test must fail, not hang.
+                    assert.ok(asked.length <= 4, `the walk kept asking: ${asked.join(', ')}`);
+                    return Promise.resolve({
+                        items: [1, 2],
+                        pagination: { items_per_page: 2, current: 1 }, // always page 1
+                        meta: {},
+                    });
+                },
+                items: (response) => itemsFromArray<number>(response, 'items'),
+            });
+
+            assert.deepEqual(await it.toArray(), [1, 2]);
+            assert.deepEqual(asked, [1, 2]);
+        });
+
+        test('a page count of 0 on an empty first page is not read as a clamp', async () => {
+            // The backend reports `current: 0` when nothing matched. That is not a
+            // page served under another number, so the (empty) page still arrives —
+            // it carries the counts a caller may want to show.
+            const it = createPageIterator<number>({
+                startPage: 1,
+                limit: 2,
+                fetch: () => Promise.resolve({ items: [], pagination: { current: 0, total: 0 }, meta: {} }),
+                items: (response) => itemsFromArray<number>(response, 'items'),
+            });
+
+            const pages = [];
+            for await (const page of it.pages()) pages.push(page);
+
+            assert.equal(pages.length, 1);
+            assert.deepEqual(pages[0].items, []);
+        });
+
+        test('an empty page after the first one is not handed over', async () => {
+            const { it, asked } = fake([
+                { items: [1], pagination: { next_page_url: '/p2' } },
+                { items: [], pagination: { next_page_url: '/p3' } },
+            ]);
+
+            const sizes = [];
+            for await (const page of it.pages()) sizes.push(page.items.length);
+
+            assert.deepEqual(sizes, [1], 'the trailing empty page should not reach the caller');
+            assert.deepEqual(asked, [1, 2]);
+        });
+
         test('an empty page ends the walk however loudly the server points on', async () => {
             const { it, asked } = fake([{ items: [], pagination: { next_page_url: '/p2', total: 9 } }]);
 
