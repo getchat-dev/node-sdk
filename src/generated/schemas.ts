@@ -57,6 +57,12 @@ export const ButtonSchema = z.object({
     label: z.string().max(100),
     state: z.enum(['default', 'loading', 'disabled']).optional(),
     style: z.enum(['primary', 'positive', 'negative', 'neutral']).optional(),
+    webhook: z
+        .object({
+            url: z.url().max(2048),
+            mode: z.enum(['replace', 'additional']).optional(),
+        })
+        .optional(),
 });
 export type Button = z.infer<typeof ButtonSchema>;
 
@@ -86,6 +92,7 @@ export type User = z.infer<typeof UserSchema>;
 export const UserResourceSchema = z.object({
     id: z.string(),
     name: z.string(),
+    is_bot: z.boolean(),
     email: z.email().optional(),
     link: z.url().optional(),
     picture: AvatarSchema.optional(),
@@ -98,6 +105,7 @@ export type UserResource = z.infer<typeof UserResourceSchema>;
 export const ParticipantResourceSchema = z.object({
     id: z.string(),
     name: z.string(),
+    is_bot: z.boolean(),
     email: z.email().optional(),
     link: z.url().optional(),
     picture: AvatarSchema.optional(),

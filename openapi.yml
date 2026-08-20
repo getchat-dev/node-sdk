@@ -597,19 +597,28 @@ paths:
         - Chat Participants
       responses:
         '200':
-          description: Participant removed
+          description: >-
+            Idempotent: removing someone who is not in the chat answers 200 as
+            well, since the caller ends up with what it asked for. Read `removed`
+            to tell the two apart. The realtime notification is only sent when a
+            member was actually removed.
           content:
             application/json:
               schema:
                 type: object
+                required:
+                  - status
+                  - removed
                 properties:
                   status:
                     type: boolean
+                  removed:
+                    type: boolean
+                    description: >-
+                      `true` when this call took the participant out of the chat,
+                      `false` when they were not a member to begin with.
         '404':
-          description: >-
-            User not found in chat (`{status, message}` body), or the
-            chat/user id in the URL didn't resolve (standard `{message}`
-            body).
+          description: The chat or user id in the URL didn't resolve.
         '422':
           description: Removal failed.
           content:
@@ -1876,8 +1885,10 @@ components:
         is_bot:
           type: boolean
           description: >-
-            Accepted but currently NOT persisted — the user upsert only reads
-            a camelCase `isBot` field, which this API never produces.
+            Marks the participant as a bot. Applied only when the user is
+            created by this call; for a user that already exists the field is
+            ignored, so the flag cannot be flipped later. Not accepted on the
+            signed chat-frame link.
         rights:
           $ref: '#/components/schemas/ParticipantRights'
 
@@ -1903,6 +1914,33 @@ components:
         style:
           type: string
           enum: [primary, positive, negative, neutral]
+        webhook:
+          type: object
+          description: >-
+            Personal webhook of this button: a press on it is delivered to
+            `url` instead of the chat/tenant webhook. Only valid on a `remote`
+            button — on any other type the request is rejected with 422. Can
+            only be set through the API (buttons set over the socket cannot
+            carry it). API
+            responses return it, chat participants never see it — the widget
+            and the socket both drop the field. The tenant-level
+            `webhook.disabled` switch does not silence it.
+          required:
+            - url
+          additionalProperties: false
+          properties:
+            url:
+              type: string
+              format: uri
+              maxLength: 2048
+            mode:
+              type: string
+              enum: [replace, additional]
+              default: replace
+              description: >-
+                `replace` — this URL takes the place of the chat/tenant webhook
+                for presses of this button; `additional` — the press goes to
+                this URL and to the chat/tenant webhook as well.
 
     Avatar:
       description: |
@@ -1967,6 +2005,7 @@ components:
       required:
         - id
         - name
+        - is_bot
         - created_at
         - updated_at
       properties:
@@ -1974,6 +2013,11 @@ components:
           type: string
         name:
           type: string
+        is_bot:
+          type: boolean
+          description: >-
+            Whether this account is a bot. Always present. Set once, when the
+            user is created; see `is_bot` on the input schemas.
         email:
           type: string
           format: email
@@ -1998,6 +2042,7 @@ components:
       required:
         - id
         - name
+        - is_bot
         - created_at
         - updated_at
       properties:
@@ -2005,6 +2050,11 @@ components:
           type: string
         name:
           type: string
+        is_bot:
+          type: boolean
+          description: >-
+            Whether this account is a bot. Always present. Set once, when the
+            user is created; see `is_bot` on the input schemas.
         email:
           type: string
           format: email

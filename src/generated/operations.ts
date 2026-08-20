@@ -209,7 +209,7 @@ const chatDeleteParticipantsInput = z.object({
     }),
 });
 export type ChatDeleteParticipantsInput = z.infer<typeof chatDeleteParticipantsInput> & RequestControlOptions;
-export type ChatDeleteParticipantsResponse = { status?: boolean };
+export type ChatDeleteParticipantsResponse = { status: boolean; removed: boolean };
 
 const chatMessagesInput = z.object({
     path: z.object({
