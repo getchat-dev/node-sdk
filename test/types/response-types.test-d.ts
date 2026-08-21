@@ -66,6 +66,16 @@ export type _CreateParticipants = Expect<
     Equal<NonNullable<ChatCreateResponse['participants']>[number], ParticipantResource>
 >;
 
+// Removing a participant answers `removed` next to `status`, both required —
+// that flag is what tells a real removal from someone who was never a member.
+export type _DeleteParticipantShape = Expect<
+    Equal<ChatDeleteParticipantsResponse, { status: boolean; removed: boolean }>
+>;
+
+// Everybody comes back with `is_bot`, on both people-shaped resources.
+export type _UserIsBot = Expect<Equal<UserResource['is_bot'], boolean>>;
+export type _ParticipantIsBot = Expect<Equal<ParticipantResource['is_bot'], boolean>>;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Wrapper defaults (the subject of this commit): each hand-written wrapper's
 // return generic must default to its operation's XResponse.

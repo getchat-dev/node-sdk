@@ -227,10 +227,10 @@ describe('live: happy-path via .api.*', { skip: SKIP_REASON }, () => {
     // ── 9. Remove user from chat ───────────────────────────────────────────
     test('9. chatDeleteParticipants — remove member from group chat (diagnostic)', async (t) => {
         try {
-            await sdk.api.chatDeleteParticipants<AnyResp>({
+            const r = await sdk.api.chatDeleteParticipants({
                 path: { chat_id: getChatId(), user_id: memberId },
             });
-            t.diagnostic('chatDeleteParticipants returned 2xx');
+            t.diagnostic(`chatDeleteParticipants returned 2xx, removed=${r.removed}`);
         } catch (e) {
             t.diagnostic(`chatDeleteParticipants raised: ${describeError(e)}`);
             throw e;

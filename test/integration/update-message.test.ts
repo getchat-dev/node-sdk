@@ -104,6 +104,23 @@ describe('Emby.updateMessage()', () => {
         assert.deepEqual(message.buttons, buttons);
     });
 
+    test("a button's own webhook survives an edit", async () => {
+        server.respondWith(loadFixture('chats/update-message/success'));
+
+        const buttons: MessageButton[] = [
+            {
+                label: 'Approve',
+                action: 'approve',
+                type: 'remote',
+                webhook: { url: 'https://hooks.example.com/approve', mode: 'replace' },
+            },
+        ];
+        await sdk.updateMessage('c1', 'm1', { buttons });
+
+        const message = (server.lastRequest!.body as JsonBody).message as Record<string, unknown>;
+        assert.deepEqual(message.buttons, buttons);
+    });
+
     test('empty extra and empty buttons are omitted', async () => {
         server.respondWith(loadFixture('chats/update-message/success'));
 

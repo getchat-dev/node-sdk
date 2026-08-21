@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, test } from 'node:test';
+import { ZodError } from 'zod';
 import type { Emby } from '../../src/index';
 import type { MessageButton, Participant, User } from '../../src/types';
 import { loadFixture } from '../helpers/loadFixture';
@@ -79,6 +80,81 @@ describe('Emby.sendMessage()', () => {
 
         const messages = (server.lastRequest!.body as JsonBody).messages as Array<{ buttons: MessageButton[] }>;
         assert.deepEqual(messages[0].buttons, buttons);
+    });
+
+    // A `remote` button may carry a webhook of its own. The SDK passes it
+    // through as it is — refusing it on other button types is the backend's
+    // job (422), so there is nothing for the mock to answer here.
+    test('a remote button carries its own webhook', async () => {
+        server.respondWith(loadFixture('chats/send-message/with-buttons'));
+
+        const buttons: MessageButton[] = [
+            {
+                label: 'Approve',
+                action: 'approve',
+                type: 'remote',
+                webhook: { url: 'https://hooks.example.com/approve', mode: 'additional' },
+            },
+        ];
+        await sdk.sendMessage('c1', USER, [], 'pick one', {}, buttons);
+
+        const messages = (server.lastRequest!.body as JsonBody).messages as Array<{ buttons: MessageButton[] }>;
+        assert.deepEqual(messages[0].buttons, buttons);
+    });
+
+    test('a webhook without a mode goes out without one — no default is filled in', async () => {
+        server.respondWith(loadFixture('chats/send-message/with-buttons'));
+
+        const buttons: MessageButton[] = [
+            { label: 'Approve', action: 'approve', type: 'remote', webhook: { url: 'https://hooks.example.com/a' } },
+        ];
+        await sdk.sendMessage('c1', USER, [], 'pick one', {}, buttons);
+
+        const messages = (server.lastRequest!.body as JsonBody).messages as Array<{ buttons: MessageButton[] }>;
+        assert.deepEqual(messages[0].buttons, buttons);
+    });
+
+    test('a webhook with a bad url is refused before anything is sent', async () => {
+        const buttons: MessageButton[] = [{ label: 'A', type: 'remote', webhook: { url: 'not-a-url' } }];
+
+        await assert.rejects(sdk.sendMessage('c1', USER, [], 'hi', {}, buttons), (e) => e instanceof ZodError);
+        assert.equal(server.requests.length, 0);
+    });
+
+    test('a webhook url over 2048 characters is refused', async () => {
+        const url = `https://hooks.example.com/${'p'.repeat(2048)}`;
+        const buttons: MessageButton[] = [{ label: 'A', type: 'remote', webhook: { url } }];
+
+        await assert.rejects(sdk.sendMessage('c1', USER, [], 'hi', {}, buttons), (e) => e instanceof ZodError);
+        assert.equal(server.requests.length, 0);
+    });
+
+    test('an unknown webhook mode is refused', async () => {
+        const buttons = [
+            { label: 'A', type: 'remote', webhook: { url: 'https://hooks.example.com/a', mode: 'both' } },
+        ] as unknown as MessageButton[];
+
+        await assert.rejects(sdk.sendMessage('c1', USER, [], 'hi', {}, buttons), (e) => e instanceof ZodError);
+        assert.equal(server.requests.length, 0);
+    });
+
+    // Anything that isn't the { url, mode? } object — the live suite checks the
+    // backend refuses these too, this one keeps them from ever being sent.
+    test('a webhook that is not an object is refused before anything is sent', async () => {
+        const shapes: unknown[] = [
+            null,
+            'https://hooks.example.com/a',
+            42,
+            true,
+            [{ url: 'https://hooks.example.com/a' }],
+            {},
+        ];
+
+        for (const webhook of shapes) {
+            const buttons = [{ label: 'A', type: 'remote', webhook }] as unknown as MessageButton[];
+            await assert.rejects(sdk.sendMessage('c1', USER, [], 'hi', {}, buttons), (e) => e instanceof ZodError);
+        }
+        assert.equal(server.requests.length, 0);
     });
 
     test('extra is merged into the message', async () => {

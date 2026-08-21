@@ -48,6 +48,8 @@ import type {
     GetChatsQuery,
     GetUserChatsQuery,
     MessageButton,
+    MessageButtonWebhook,
+    MessageButtonWebhookMode,
     MessageInput,
     MessageResource,
     MessageUpdate,
@@ -92,6 +94,11 @@ export type _sigSendMessage = Expect<
 >;
 // `force` is the only thing in there for now, and it is optional.
 export type _sendMessageOptions = Expect<Equal<SendMessageOptions, { force?: boolean }>>;
+// A button may carry a webhook of its own; `mode` is optional (the server's
+// default is `replace`) and closed to the two values the spec lists.
+export type _buttonWebhook = Expect<Equal<MessageButton['webhook'], MessageButtonWebhook | undefined>>;
+export type _buttonWebhookShape = Expect<Equal<MessageButtonWebhook, { url: string; mode?: MessageButtonWebhookMode }>>;
+export type _buttonWebhookMode = Expect<Equal<MessageButtonWebhookMode, 'replace' | 'additional'>>;
 export type _sigUpdateMessage = Expect<
     Equal<
         Parameters<Emby['updateMessage']>,
@@ -205,6 +212,38 @@ export type _inSendMsgNoUser = ExpectFalse<
 >;
 export type _inSendMsgNoMessages = ExpectFalse<
     AcceptsInput<'chatSendMessage', { path: { chat_id: 'c1' }; body: { user: { id: 'u1'; name: 'U' } } }>
+>;
+// A button's own webhook rides the generated input too, with the same closed
+// set of modes.
+type SendMsgWithButton<B> = {
+    path: { chat_id: 'c1' };
+    body: { user: { id: 'u1'; name: 'U' }; messages: [{ text: 'hi'; buttons: [B] }] };
+};
+export type _inSendMsgButtonWebhook = Expect<
+    AcceptsInput<
+        'chatSendMessage',
+        SendMsgWithButton<{
+            type: 'remote';
+            label: 'Approve';
+            webhook: { url: 'https://hooks.example.com/a'; mode: 'additional' };
+        }>
+    >
+>;
+export type _inSendMsgButtonWebhookBadMode = ExpectFalse<
+    AcceptsInput<
+        'chatSendMessage',
+        SendMsgWithButton<{
+            type: 'remote';
+            label: 'Approve';
+            webhook: { url: 'https://hooks.example.com/a'; mode: 'both' };
+        }>
+    >
+>;
+export type _inSendMsgButtonWebhookNoUrl = ExpectFalse<
+    AcceptsInput<
+        'chatSendMessage',
+        SendMsgWithButton<{ type: 'remote'; label: 'Approve'; webhook: { mode: 'replace' } }>
+    >
 >;
 
 // chatCreate — body.chat requires id + title + owner (type is optional per spec)

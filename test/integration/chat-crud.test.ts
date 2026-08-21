@@ -158,8 +158,22 @@ describe('Emby chat CRUD wrappers', () => {
             assert.match(req.path!, /^\/api\/v1\/chats\/c1\/participants\/u1/);
         });
 
-        test('404 when participant not found', async () => {
-            server.respondWith({ status: 404, body: { message: 'not in chat' } });
+        // The answer distinguishes a real removal from a no-op: taking out
+        // somebody who was never in the chat is not an error, it just says so.
+        test('the answer carries `removed`', async () => {
+            server.respondWith({ status: 200, body: { status: true, removed: true } });
+            const r = await sdk.removeParticipantFromChat('c1', 'u1');
+            assert.deepEqual(r, { status: true, removed: true });
+        });
+
+        test('removing a non-member resolves with removed: false', async () => {
+            server.respondWith({ status: 200, body: { status: true, removed: false } });
+            const r = await sdk.removeParticipantFromChat('c1', 'stranger');
+            assert.deepEqual(r, { status: true, removed: false });
+        });
+
+        test("404 when the chat or user id doesn't resolve", async () => {
+            server.respondWith({ status: 404, body: { message: 'chat not found' } });
             await assert.rejects(sdk.removeParticipantFromChat('c1', 'ghost'), (e) => (e as HttpErr).status === 404);
         });
     });
