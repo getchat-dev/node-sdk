@@ -17,6 +17,7 @@ export type ChatType = 'private' | 'group' | 'system';
 export type MessageButtonType = 'url' | 'call' | 'local' | 'remote';
 export type MessageButtonState = 'default' | 'loading' | 'disabled';
 export type MessageButtonStyle = 'primary' | 'positive' | 'negative' | 'neutral';
+export type MessageButtonWebhookMode = 'replace' | 'additional';
 
 export type DeviceType = 'android' | 'ios' | 'web';
 
@@ -56,6 +57,7 @@ export interface User {
 export interface UserResource {
     id: string;
     name: string;
+    is_bot: boolean;
     email?: string;
     link?: string;
     picture?: string;
@@ -85,6 +87,11 @@ export interface Participant {
     email?: string;
     link?: string;
     picture?: string;
+    /**
+     * Marks the participant as a bot. Only read when this call creates the
+     * user — for someone the backend already knows the field is ignored, so
+     * the flag cannot be turned around later.
+     */
     is_bot?: boolean;
     /**
      * Per-chat right overrides applied when the participant is attached
@@ -117,10 +124,11 @@ export interface UrlRecipient {
     is_bot?: boolean;
 }
 
-/** Output shape from the API. Note: no `is_bot` on the resource. */
+/** Output shape from the API. */
 export interface ParticipantResource {
     id: string;
     name: string;
+    is_bot: boolean;
     email?: string;
     link?: string;
     picture?: string;
@@ -226,12 +234,31 @@ export interface ChatResource {
 // Message
 // ---------------------------------------------------------------------------
 
+/**
+ * Per-button webhook target. Valid on `remote` buttons only — on any other
+ * type the backend rejects the message with 422. Settable through the REST API
+ * only (buttons put up over the socket cannot carry one); it comes back in API
+ * responses but is stripped before the button reaches the chat participants,
+ * and the tenant-level `WebhookSettings.disabled` switch does not silence it.
+ */
+export interface MessageButtonWebhook {
+    /** Where a press is delivered. Max 2048 chars. */
+    url: string;
+    /**
+     * `replace` (default) — this URL takes the place of the chat/tenant
+     * webhook for presses of this button; `additional` — the press goes to
+     * both.
+     */
+    mode?: MessageButtonWebhookMode;
+}
+
 export interface MessageButton {
     type: MessageButtonType;
     label: string;
     action?: string;
     state?: MessageButtonState;
     style?: MessageButtonStyle;
+    webhook?: MessageButtonWebhook;
 }
 
 /** Input for POST /chats/{chat_id}/messages (items inside `messages[]`). */

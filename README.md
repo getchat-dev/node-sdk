@@ -463,8 +463,9 @@ console.log(r.message_ids);
   message** (`voice_url` instead of text) has no ready-made method — send it with
   [`emby.api.chatSendMessage`](#the-generated-api-methods).
 - Limits: 4096 characters of text, 100 keys of extra data, 20
-  [buttons](#messagebutton). A `recipient_id`, if you set one, has to be a user
-  who already exists.
+  [buttons](#messagebutton) — a `remote` button can send its presses to an
+  address of its own. A `recipient_id`, if you set one, has to be a user who
+  already exists.
 - An author who is muted in this chat is refused (403). Pass `force: true` in the
   last argument to post anyway — see [`SendMessageOptions`](#sendmessageoptions).
 - You get back only the **ids** of the new messages, not the messages themselves.
@@ -532,7 +533,7 @@ else throws (the server would have quietly ignored it).
 | [`getChatParticipants(chatId, query?)`](#getchatparticipants) | List who is in a chat | `{ status, participants, meta, pagination }` |
 | [`iterateChatParticipants(chatId, query?)`](#iteratechatparticipants) | The same list, every page of it | [a walker](#walking-a-whole-list) over [`ParticipantResource`](#participantresource) |
 | [`addParticipantsToChat(chatId, participants)`](#addparticipantstochat) | Add people | `{ status }` |
-| [`removeParticipantFromChat(chatId, userId)`](#removeparticipantfromchat) | Remove one person | `{ status }` |
+| [`removeParticipantFromChat(chatId, userId)`](#removeparticipantfromchat) | Remove one person | `{ status, removed }` |
 
 Types used here: [`PaginationQuery`](#paginationquery),
 [`Participant`](#participant).
@@ -578,7 +579,10 @@ is updated. An empty array throws
 await emby.removeParticipantFromChat('support-42', 'u-2');
 ```
 
-Removes one person; loop on your side to remove several.
+Removes one person; loop on your side to remove several. `removed` says whether
+this call really took somebody out of the chat: asking to remove a person who
+isn't in it is not an error — you get `{ status: true, removed: false }` and
+the chat hears nothing. A 404 means the chat or the person doesn't exist at all.
 
 ### Rights in one chat
 
@@ -997,7 +1001,7 @@ A person, as the API sees them.
 | `email` | `string` | Email, up to 100 characters |
 | `link` | `string` | Profile link — has to be a URL |
 | `picture` | `string` | Avatar — any string here, not checked as a URL |
-| `is_bot` | `boolean` | Accepted, but not saved yet |
+| `is_bot` | `boolean` | Marks them as a bot. Only used when this call creates the person — on one who already exists it is ignored, so the flag can't be turned around later |
 | `rights` | [`ParticipantRights`](#participantrights) | Rights for this chat, applied as the person is added |
 
 ### `MessageButton`
@@ -1009,8 +1013,18 @@ A person, as the API sees them.
 | `action` | `string` | What to do, up to 255 characters; read according to `type` |
 | `state` | `'default' \| 'loading' \| 'disabled'` | Whether it can be pressed |
 | `style` | `'primary' \| 'positive' \| 'negative' \| 'neutral'` | Its colour |
+| `webhook` | `{ url, mode? }` | Where presses of this button go — `remote` buttons only |
 
 Up to 20 buttons on a message.
+
+A `remote` button can carry a `webhook` of its own, and then a press on it is
+delivered to that `url` (2048 characters at most) instead of the webhook the
+chat would otherwise use. `mode: 'additional'` sends it to both; the default,
+`replace`, sends it only to the button's own address. On a button of any other kind the request is refused
+(422). It can only be set through the API — a button put up over the socket
+can't carry one — and the people in the chat never see it: it comes back in
+API answers and is dropped everywhere else. Switching the workspace webhook
+off doesn't silence it.
 
 ### `SendMessageOptions`
 
@@ -1193,6 +1207,7 @@ The server also sends `seq`, the number messages are ordered by — see
 | --- | --- | --- |
 | `id` | `string` | User id |
 | `name` | `string` | Display name |
+| `is_bot` | `boolean` | Whether this is a bot. Always there; decided when the person is created |
 | `email` | `string` | Email |
 | `link` | `string` | Profile link |
 | `picture` | `string` | Either an image URL, or a made-up avatar: `{ kind, color, initials }` |
@@ -1202,8 +1217,8 @@ The server also sends `seq`, the number messages are ordered by — see
 ### `ParticipantResource`
 
 The same as [`UserResource`](#userresource) without `metadata`: `id`, `name`,
-`email`, `link`, `picture`, `created_at`, `updated_at`. The list of participants
-says nothing about rights — read those with
+`is_bot`, `email`, `link`, `picture`, `created_at`, `updated_at`. The list of
+participants says nothing about rights — read those with
 [`getParticipantRights`](#getparticipantrights).
 
 ### Where the types lag behind the API
