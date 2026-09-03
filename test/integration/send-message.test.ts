@@ -267,6 +267,134 @@ describe('Emby.sendMessage()', () => {
         assert.equal(server.lastRequest!.path, '/api/v1/chats/42/messages');
     });
 
+    describe('voice messages', () => {
+        test('attachment_id alone is a whole message — no text needed', async () => {
+            server.respondWith(loadFixture('chats/send-message/success'));
+
+            await sdk.sendMessage('c1', USER, [], { attachment_id: 'att-abc123' });
+
+            const body = server.lastRequest!.body as JsonBody;
+            assert.deepEqual(body.messages, [{ attachment_id: 'att-abc123' }]);
+        });
+
+        test('text next to a voice rides along as the caption', async () => {
+            server.respondWith(loadFixture('chats/send-message/success'));
+
+            await sdk.sendMessage('c1', USER, [], { attachment_id: 'att-abc123', text: 'listen to this' });
+
+            const body = server.lastRequest!.body as JsonBody;
+            assert.deepEqual(body.messages, [{ text: 'listen to this', attachment_id: 'att-abc123' }]);
+        });
+
+        test('an empty caption is left out rather than sent as empty text', async () => {
+            server.respondWith(loadFixture('chats/send-message/success'));
+
+            await sdk.sendMessage('c1', USER, [], { attachment_id: 'att-abc123', text: '   ' });
+
+            const body = server.lastRequest!.body as JsonBody;
+            assert.deepEqual(body.messages, [{ attachment_id: 'att-abc123' }]);
+        });
+
+        test('voice_url works the same way', async () => {
+            server.respondWith(loadFixture('chats/send-message/success'));
+
+            await sdk.sendMessage('c1', USER, [], { voice_url: 'https://cdn.example.com/note.mp3' });
+
+            const body = server.lastRequest!.body as JsonBody;
+            assert.deepEqual(body.messages, [{ voice_url: 'https://cdn.example.com/note.mp3' }]);
+        });
+
+        test('recipient_id, extras and buttons still attach to a voice message', async () => {
+            server.respondWith(loadFixture('chats/send-message/success'));
+
+            await sdk.sendMessage(
+                'c1',
+                USER,
+                [],
+                { attachment_id: 'att-abc123', recipient_id: 'r42' },
+                { source: 'mic' },
+                [{ label: 'Reply', action: 'reply', type: 'local' }],
+            );
+
+            const body = server.lastRequest!.body as JsonBody;
+            assert.deepEqual(body.messages, [
+                {
+                    recipient_id: 'r42',
+                    attachment_id: 'att-abc123',
+                    extra: { source: 'mic' },
+                    buttons: [{ label: 'Reply', action: 'reply', type: 'local' }],
+                },
+            ]);
+        });
+
+        test('an empty voice next to text is ignored, not an error', async () => {
+            server.respondWith(loadFixture('chats/send-message/success'));
+
+            await sdk.sendMessage('c1', USER, [], { text: 'hi', attachment_id: '' });
+
+            const body = server.lastRequest!.body as JsonBody;
+            assert.deepEqual(body.messages, [{ text: 'hi' }]);
+        });
+
+        test('a voice that is not a string is named as such, not reported as missing text', async () => {
+            await assert.rejects(
+                sdk.sendMessage('c1', USER, [], { attachment_id: 42 as unknown as string }),
+                (err) => err instanceof ZodError && /string/.test(err.message),
+            );
+            assert.equal(server.requests.length, 0);
+        });
+
+        test('voice_url has to be a URL', async () => {
+            await assert.rejects(
+                sdk.sendMessage('c1', USER, [], { voice_url: 'note.mp3' }),
+                (err) => err instanceof ZodError,
+            );
+            assert.equal(server.requests.length, 0);
+        });
+
+        test('a link and an attachment together are passed on — the backend decides', async () => {
+            // The spec no longer forbids the pair in its schema, so the SDK sends
+            // both as given instead of refusing them itself.
+            server.respondWith(loadFixture('chats/send-message/success'));
+
+            await sdk.sendMessage('c1', USER, [], {
+                voice_url: 'https://cdn.example.com/note.mp3',
+                attachment_id: 'att-abc123',
+            });
+
+            const body = server.lastRequest!.body as JsonBody;
+            assert.deepEqual(body.messages, [
+                { voice_url: 'https://cdn.example.com/note.mp3', attachment_id: 'att-abc123' },
+            ]);
+        });
+
+        test('the old voice_id is not a file any more — text is required', () => {
+            // Replaced by attachment_id before it was ever published; left unread
+            // so a stale caller hears about it instead of posting an empty message.
+            assert.throws(
+                () => sdk.sendMessage('c1', USER, [], { voice_id: 'f-abc123' } as unknown as { text: string }),
+                /message text is required/,
+            );
+            assert.equal(server.requests.length, 0);
+        });
+
+        test('an empty attachment_id is no file at all — text is required again', () => {
+            assert.throws(() => sdk.sendMessage('c1', USER, [], { attachment_id: '' }), /message text is required/);
+            assert.equal(server.requests.length, 0);
+        });
+
+        test('an attachment the backend refuses comes back as a 422 with its reason', async () => {
+            server.respondWith(loadFixture('chats/send-message/attachment-rejected'));
+
+            await assert.rejects(sdk.sendMessage('c1', USER, [], { attachment_id: 'att-widget-1' }), (err) => {
+                const e = err as HttpErr & { body?: { message?: string } };
+                assert.equal(e.status, 422);
+                assert.equal(e.body?.message, 'Attachment att-widget-1 was not produced by the resource pipeline');
+                return true;
+            });
+        });
+    });
+
     test('401 unauthorized', async () => {
         server.respondWith(loadFixture('chats/send-message/unauthorized'));
         await assert.rejects(sdk.sendMessage('c1', USER, [], 'hi'), (err) => (err as HttpErr).status === 401);

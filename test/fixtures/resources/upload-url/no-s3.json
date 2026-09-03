@@ -1,0 +1,7 @@
+{
+  "status": 422,
+  "body": {
+    "status": false,
+    "message": "S3 credentials are not configured"
+  }
+}

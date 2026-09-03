@@ -442,7 +442,7 @@ const r = await emby.sendMessage(
     'support-42',                             // chat id, or a chat object
     { id: 'u-1', name: 'Alice' },             // who is writing — required, id and name
     [],                                       // participants — only if this call creates the chat
-    'Hello world',                            // text, or { text, recipient_id }
+    'Hello world',                            // text, or { text, recipient_id, attachment_id }
     { source: 'crm', is_service: true },      // extra data — strings, numbers, booleans
     [{ type: 'local', label: 'OK', action: 'ok' }],
 );
@@ -459,9 +459,10 @@ console.log(r.message_ids);
 - `participants` are used **only** when this call creates the chat (a `private`
   chat needs them, two at most; other kinds allow up to 10). For an existing chat
   they are ignored — use [`addParticipantsToChat`](#addparticipantstochat).
-- The text can't be empty here, or you get `message text is required`. A **voice
-  message** (`voice_url` instead of text) has no ready-made method — send it with
-  [`emby.api.chatSendMessage`](#the-generated-api-methods).
+- The text can't be empty, or you get `message text is required` — unless the
+  message carries a **voice** (`{ attachment_id }`, or the deprecated
+  `{ voice_url }`), which is a whole message on its own. See
+  [Voice messages](#voice-messages).
 - Limits: 4096 characters of text, 100 keys of extra data, 20
   [buttons](#messagebutton) — a `remote` button can send its presses to an
   address of its own. A `recipient_id`, if you set one, has to be a user who
@@ -525,6 +526,116 @@ await emby.sendTyping('support-42', 'u-1', 10);   // keep it up for 10 seconds
 
 `time` is whole seconds, 1 to 60, and the SDK checks it before sending — anything
 else throws (the server would have quietly ignored it).
+
+#### Voice messages
+
+A voice goes to storage first, gets checked and converted there, and only then
+is sent — the message carries just the id of the finished attachment. The file
+never passes through this SDK.
+
+```ts
+// 1. Ask for a place to put it.
+const slot = await emby.api.resourceUploadUrl({
+    body: { type: 'voice', mime: 'audio/mpeg', name: 'note.mp3', size: bytes.length },
+});
+
+// 2. Upload it yourself, with the headers you were given.
+await fetch(slot.upload_url!, {
+    method: slot.method,
+    headers: slot.headers,
+    body: new Uint8Array(bytes),   // bytes: a Buffer with the recording
+});
+
+// 3. Say the upload is done. Cheap checks run right away; the rest in the background.
+let { resource } = await emby.api.resourceVerify({ path: { resource_id: slot.resource_id! } });
+
+// 4. Wait until it is ready — give up after a while rather than poll forever.
+const deadline = Date.now() + 60_000;
+while (resource?.status !== 'ready' && resource?.status !== 'failed') {
+    if (Date.now() > deadline) throw new Error(`voice still ${resource?.status} after 60s`);
+    await new Promise((r) => setTimeout(r, 3000));
+    ({ resource } = await emby.api.resourceShow({ path: { resource_id: slot.resource_id! } }));
+}
+if (resource.status === 'failed') throw new Error(resource.error ?? 'voice processing failed');
+
+// 5. Send the message with the attachment instead of the file.
+await emby.sendMessage('support-42', { id: 'u-1', name: 'Alice' }, [], {
+    attachment_id: resource.attachment_id!,
+    text: 'listen to this',       // optional — it becomes the caption
+});
+```
+
+- `type: 'voice'` is the only kind for now. The `mime` is one of `audio/ogg`,
+  `audio/mpeg`, `audio/mp4` (`audio/x-m4a`), `audio/webm`, `audio/wav`
+  (`audio/x-wav`), `audio/x-flac`, `audio/x-aiff`, `audio/x-ms-wma` — parameters
+  are ignored, so `audio/webm;codecs=opus` counts as `audio/webm`. Whatever you
+  upload, the stored voice is `ogg/opus`. `size` is optional and only makes an
+  oversized file fail before you upload it.
+- The answer also carries `max_size`, `max_duration` (checked after the upload —
+  a longer file ends up `failed`), `url_expires_at` (when the upload link dies) and
+  `expires_at` (until when the resource can still be verified).
+- The upload is **private**: until it is verified it has no public address.
+- **Polling.** `resourceVerify` and `resourceShow` answer with the same
+  `resource`, whose `status` is `pending` (waiting for the upload), `verifying`,
+  `processing`, then `ready` (with `attachment_id`) or `failed` (with `error`).
+  Look at the verify answer before polling: a file the server has already
+  processed once is recognised and comes back `ready` straight away. Until the
+  status is final, both answers carry a `Retry-After` header saying how many
+  seconds to wait before the next poll (3 today). The SDK returns the body only,
+  so you can't read it — pick your own interval, and a limit, because a resource
+  whose processing never starts stays in `verifying` without ever failing.
+- `resourceVerify` is safe to repeat: once it has started, a second call starts
+  nothing new and just reports where the resource is.
+- A 422 from verify (see below) leaves the resource waiting for its file: upload
+  again to the same link, while it hasn't expired, and verify again. A resource
+  that ended up `failed` is done for — start over with a new one.
+- An `attachment_id` is **reusable**: the same one can go to several messages and
+  several chats, as long as they keep files in the same bucket.
+- Pass `chat_id` when that chat keeps its files in a bucket of its own; the file
+  then goes there. Sending an attachment into a chat that stores elsewhere is a
+  422 that tells you to pass `chat_id` when asking for the link.
+- **What is checked, and when.** Asking for the link checks the `mime` you name and
+  nothing else — there are no bytes yet, so `image/png` or a made-up type is turned
+  away right there. S3 then takes whatever you hand it. The file itself is read on
+  **verify**: calling it before the upload, an empty file, one over `max_size`, a
+  picture, or a real recording in a different format than declared is a 422 with
+  the reason in the message — and so is a resource past its `expires_at`.
+  Decoding, conversion and the `max_duration` check come after, in the
+  background, and show up as `failed` if they go wrong.
+- Only attachments from this pipeline are accepted. An unknown id, or one that
+  belongs to a file sent some other way (the chat widget, `voice_url`), is a 422.
+- `{ voice_url: 'https://example.com/note.mp3' }` still works for integrations
+  already on it, but is **deprecated**: the server fetches the link and posts the
+  message before converting it, so a format browsers can't play arrives
+  unplayable. Send one or the other — a message with both `voice_url` and
+  `attachment_id` is refused by the server with a 422.
+- **Reading it back.** A message with a file comes back from
+  [`getMessagesFromChat`](#getmessagesfromchat) with an `attachments` list: `url`,
+  `mime`, `size`, `duration` and `waveform` of the playable `ogg`, other shapes
+  under `variants` (the original stays private and has no `url`). The
+  hand-written [`MessageResource`](#messageresource) doesn't list the field yet —
+  see [where the types lag behind](#where-the-types-lag-behind-the-api).
+
+**No S3, no upload.** Storage is set up per tenant
+(`emby.api.tenantSetS3Credentials`) or per chat (`emby.api.chatSetS3Credentials`).
+Without it there is nowhere to put the file, and asking for a link is refused with
+a 422:
+
+```ts
+try {
+    await emby.api.resourceUploadUrl({ body: { type: 'voice', mime: 'audio/mpeg' } });
+} catch (e) {
+    const err = e as Error & { status: number; body: { message?: string } };
+    if (err.status === 422) {
+        console.error(err.body.message);   // e.g. "No S3 credentials found"
+    }
+}
+```
+
+The SDK doesn't repeat the request: the same answer would come back. A declared
+`size` over the limit is a 422 in the same shape; an unsupported `mime` is a 422
+too, with the reason in `message` and per-field details under `errors`. An unknown
+`chat_id` is a 404 instead, and so is an unknown `resource_id` on verify or status.
 
 ### Participants
 
@@ -750,7 +861,7 @@ await emby.api.chatSendMessage({
     path: { chat_id: 'support-42' },
     body: {
         user: { id: 'u-1', name: 'Alice' },       // the author, at the top level
-        messages: [{ voice_url: 'https://example.com/note.mp3' }],
+        messages: [{ text: 'Hello', disable_notification: true }],
     },
     timeout: 10_000,
 });
@@ -769,7 +880,7 @@ Input the API wouldn't accept throws right away, before any request goes out. Th
 answer isn't checked — the SDK passes it through as it came — but the types
 describe what the endpoint promises.
 
-All 31 endpoints, and the ready-made method for each:
+All 32 endpoints, and the ready-made method for each:
 
 | `emby.api.*` | Endpoint | Ready-made method |
 | --- | --- | --- |
@@ -790,6 +901,9 @@ All 31 endpoints, and the ready-made method for each:
 | `chatSendTyping` | `PUT /chats/{chat_id}/typing/{user_id}` | [`sendTyping`](#sendtyping) |
 | `chatSetWebhook` | `PUT /chats/{chat_id}/webhook` | — |
 | `chatSetS3Credentials` | `PUT /chats/{chat_id}/s3-credentials` | — |
+| `resourceUploadUrl` | `POST /resources/upload-url` | — |
+| `resourceVerify` | `POST /resources/{resource_id}/verify` | — |
+| `resourceShow` | `GET /resources/{resource_id}` | — |
 | `userCreate` | `POST /users` | [`createUser`](#createuser) |
 | `userShow` | `GET /users/{user_id}` | [`getUser`](#getuser) |
 | `userUpdate` | `PUT /users/{user_id}` | [`updateUser`](#updateuser) |
@@ -807,6 +921,8 @@ All 31 endpoints, and the ready-made method for each:
 
 Worth knowing about the ones with no ready-made method:
 
+- `resourceUploadUrl`, `resourceVerify` and `resourceShow` are the steps of
+  getting a voice recording into a message — see [Voice messages](#voice-messages).
 - `chatSetWebhook` wants at least one of `disabled` or `url`, and always answers
   with 200. `status: false` means either "nothing changed" or "it didn't work" —
   the second case adds a `message`.
@@ -1232,13 +1348,12 @@ the API takes and returns these values anyway — but TypeScript will argue:
   supergroup or a channel use
   [`emby.api.chatCreate`](#the-generated-api-methods), whose types are generated
   and correct.
-- **`MessageResource`** has no `seq`, although every message has one.
+- **`MessageResource`** has no `seq`, although every message has one, and no
+  `attachments` for a message that carries a file. The generated
+  `MessageResource` from `emby.api.chatMessages` has both.
 - **`ChatResource`** has no `participants` or `participants_omitted`.
 - **`UserResource.picture`** says `string`, but a person without an uploaded
   avatar gets the object described above.
-- **Voice messages** (`voice_url` instead of text) have no place in
-  `MessageInput` — send them with
-  [`emby.api.chatSendMessage`](#the-generated-api-methods).
 - **[`UserRights`](#userrights)** knows neither the loose `'on'` / `'yes'`
   strings nor the [tail after a colon](#rights-in-a-link), both of which work —
   cast where you use them.

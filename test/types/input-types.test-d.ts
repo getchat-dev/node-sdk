@@ -11,7 +11,7 @@
 //   C. An explicit `<T>` overrides the generated response default.
 //   D. The `Avatar` oneOf accepts both of its branches and rejects a bad shape.
 //   E. `requestApi` stays `<T = unknown>` (raw transport, never narrowed).
-//   F. Every one of the 30 operations: empty input is rejected unless the whole
+//   F. Every one of the 34 operations: empty input is rejected unless the whole
 //      input is optional (breadth complement to B — guards required-ness).
 //   G. The `Prefer` header slot's exact union is pinned on all five ops that carry it.
 //   H. Excess (unknown) properties are rejected at the call site.
@@ -296,7 +296,7 @@ export function _requestApiDefault() {
 export type _requestApiUnknown = Expect<Equal<Awaited<ReturnType<typeof _requestApiDefault>>, unknown>>;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// F. Exhaustive required-ness across ALL 30 operations. Empty input must be
+// F. Exhaustive required-ness across ALL 34 operations. Empty input must be
 //    REJECTED by every op with a required path/body, and ACCEPTED only by the two
 //    whose entire input is optional (`chatList`, `tenantClearData`). This is the
 //    breadth complement to the specific-field negatives above: it guards against a
@@ -325,6 +325,9 @@ export type _reqChatUpdateMessage = ExpectFalse<AcceptsInput<'chatUpdateMessage'
 export type _reqChatSendTyping = ExpectFalse<AcceptsInput<'chatSendTyping', Empty>>;
 export type _reqChatSetWebhook = ExpectFalse<AcceptsInput<'chatSetWebhook', Empty>>;
 export type _reqChatSetS3Credentials = ExpectFalse<AcceptsInput<'chatSetS3Credentials', Empty>>;
+export type _reqResourceUploadUrl = ExpectFalse<AcceptsInput<'resourceUploadUrl', Empty>>;
+export type _reqResourceVerify = ExpectFalse<AcceptsInput<'resourceVerify', Empty>>;
+export type _reqResourceShow = ExpectFalse<AcceptsInput<'resourceShow', Empty>>;
 export type _reqUserCreate = ExpectFalse<AcceptsInput<'userCreate', Empty>>;
 export type _reqUserShow = ExpectFalse<AcceptsInput<'userShow', Empty>>;
 export type _reqUserUpdate = ExpectFalse<AcceptsInput<'userUpdate', Empty>>;
@@ -421,6 +424,19 @@ export type _ctrlOptional = Expect<AcceptsInput<'chatShow', { path: { chat_id: '
 
 export type _extraValueShape = Expect<Equal<ExtraValue, string | number | boolean>>;
 export type _extraMapShape = Expect<Equal<ExtraMap, Record<string, string | number | boolean>>>;
+
+// What a caller hands to `sendMessage`: a string, or the object form that can
+// also carry a file. Text is optional there — next to a file it is the caption
+// — so `{ attachment_id }` on its own has to type-check.
+export type _msgTextInputObject = Expect<
+    Equal<
+        Exclude<MessageTextInput, string>,
+        { text?: string; recipient_id?: string; voice_url?: string; attachment_id?: string }
+    >
+>;
+export type _msgTextInputFileOnly = Expect<Assignable<{ attachment_id: 'att-1' }, MessageTextInput>>;
+export type _msgInputAttachmentId = Expect<Equal<MessageInput['attachment_id'], string | undefined>>;
+export type _msgInputVoiceUrl = Expect<Equal<MessageInput['voice_url'], string | undefined>>;
 
 // The hand-written message types carry the widened map.
 export type _msgInputExtra = Expect<Equal<MessageInput['extra'], ExtraMap | undefined>>;

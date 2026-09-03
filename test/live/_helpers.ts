@@ -12,6 +12,7 @@
 import * as crypto from 'node:crypto';
 import { after, before } from 'node:test';
 import { Emby } from '../../src/index.js';
+import { normalizeEndpoint, type S3Target } from './_s3.js';
 
 export const LIVE_ENV = {
     id: process.env.EMBY_ID,
@@ -34,6 +35,68 @@ export function makeLiveSdk(): Emby {
         api_token: LIVE_ENV.apiToken,
         base_url: LIVE_ENV.baseUrl,
     });
+}
+
+/**
+ * The bucket the voice tests are allowed to write into.
+ *
+ * Not `EMBY_*` on purpose: those four configure the SDK, while these exist only
+ * for the tests and the SDK never reads them. The names match the fields of
+ * `tenant.setS3Credentials` one for one, so nothing has to be translated.
+ *
+ * Without them the upload suite can only check that the backend refuses to hand
+ * out a URL; with them it runs the whole way against a real bucket.
+ */
+export const TEST_S3 = {
+    accessKey: process.env.TEST_S3_ACCESS_KEY,
+    secretKey: process.env.TEST_S3_SECRET_KEY,
+    endpointUrl: process.env.TEST_S3_ENDPOINT_URL,
+    bucket: process.env.TEST_S3_BUCKET,
+    region: process.env.TEST_S3_REGION,
+    pathStyle: process.env.TEST_S3_PATH_STYLE,
+    publicUrl: process.env.TEST_S3_PUBLIC_URL,
+    cdnUrl: process.env.TEST_S3_CDN_URL,
+};
+
+export const HAS_TEST_S3 = !!(TEST_S3.accessKey && TEST_S3.secretKey && TEST_S3.endpointUrl && TEST_S3.bucket);
+
+export const NO_S3_REASON = 'no TEST_S3_* in env; add bucket keys to .env to run the upload against a real bucket';
+
+/**
+ * Point the tenant at the test bucket.
+ *
+ * There is no way back: the endpoint wants all four fields, so keys can be
+ * replaced but not removed. A test that wants to see the "no S3 here" refusal has
+ * to look before calling this.
+ */
+export async function configureTenantS3(sdk: Emby): Promise<void> {
+    if (!HAS_TEST_S3) throw new Error(`configureTenantS3: ${NO_S3_REASON}`);
+    const truthy = (v: string | undefined): boolean => ['1', 'true', 'yes', 'on'].includes(String(v).toLowerCase());
+    await sdk.api.tenantSetS3Credentials({
+        body: {
+            access_key: TEST_S3.accessKey as string,
+            secret_key: TEST_S3.secretKey as string,
+            endpoint_url: normalizeEndpoint(TEST_S3.endpointUrl as string),
+            bucket: TEST_S3.bucket as string,
+            ...(TEST_S3.region ? { region: TEST_S3.region } : {}),
+            ...(TEST_S3.pathStyle ? { s3_path_style: truthy(TEST_S3.pathStyle) } : {}),
+            ...(TEST_S3.publicUrl ? { public_url: TEST_S3.publicUrl } : {}),
+            ...(TEST_S3.cdnUrl ? { cdn_url: TEST_S3.cdnUrl } : {}),
+        },
+    });
+}
+
+/** The same bucket as an `S3Target`, for talking to S3 without the backend. */
+export function testS3Target(): S3Target {
+    if (!HAS_TEST_S3) throw new Error(`testS3Target: ${NO_S3_REASON}`);
+    return {
+        accessKey: TEST_S3.accessKey as string,
+        secretKey: TEST_S3.secretKey as string,
+        endpointUrl: TEST_S3.endpointUrl as string,
+        bucket: TEST_S3.bucket as string,
+        region: TEST_S3.region,
+        pathStyle: ['1', 'true', 'yes', 'on'].includes(String(TEST_S3.pathStyle).toLowerCase()),
+    };
 }
 
 /** Unique short suffix — 8 hex chars — to avoid collisions with prior runs. */

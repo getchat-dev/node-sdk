@@ -184,7 +184,15 @@ export interface SendMessageOptions {
 
 /** Convenience alias used by `sendMessage` — accepts the object shape or a string id. */
 export type ChatArg = ChatInput | string;
-export type MessageTextInput = string | { text: string; recipient_id?: string };
+/**
+ * What `sendMessage` takes as the message. A plain string is the text. The object
+ * form can also carry a private recipient and a file (`attachment_id`, or the
+ * deprecated `voice_url`) — see {@link Emby.sendMessage} for where each comes
+ * from. With a file the text is optional and becomes the caption.
+ */
+export type MessageTextInput =
+    | string
+    | { text?: string; recipient_id?: string; voice_url?: string; attachment_id?: string };
 
 // Page-size ceilings, from `limitParam` in openapi.yml. The backend clamps a
 // bigger `limit` on its own, so these exist for the walkers: one of their
@@ -792,6 +800,19 @@ export class Emby {
     /**
      * Post a message. The seventh argument carries what isn't about the message
      * itself — today that is `force`, see {@link SendMessageOptions}.
+     *
+     * A voice message goes here too. Pass `{ attachment_id }` for a file that went
+     * through the resource pipeline: {@link Emby.api} `resourceUploadUrl`, PUT the
+     * bytes to the URL it returns, `resourceVerify`, then poll `resourceShow`
+     * until `status` is `ready` — that answer carries the id. The same id can be
+     * sent again, to other chats too, as long as they keep files in the same
+     * bucket. `{ voice_url }` still works but is deprecated: the backend fetches
+     * the link and posts the message before converting it, so a format browsers
+     * can't play arrives unplayable. The text is optional next to either and
+     * becomes the caption.
+     *
+     * Send one or the other. The spec states that rule in words only, so the SDK
+     * doesn't check it: the pair goes out and the backend answers 422.
      */
     sendMessage<T = ChatSendMessageResponse>(
         chat: ChatArg,
@@ -802,21 +823,48 @@ export class Emby {
         buttons: MessageButton[] = [],
         { force = false }: SendMessageOptions = {},
     ): Promise<T> {
-        // Build the message item first — text/recipient_id then extras.
-        const messageData: { text?: string; recipient_id?: string; extra?: ExtraMap; buttons?: MessageButton[] } = {};
+        // Build the message item first — text/recipient_id/file then extras.
+        const messageData: {
+            text?: string;
+            recipient_id?: string;
+            voice_url?: string;
+            attachment_id?: string;
+            extra?: ExtraMap;
+            buttons?: MessageButton[];
+        } = {};
 
         if (_.isPlainObject(message)) {
-            const normalized = normalizeData(message, ['text', 'recipient_id']);
+            const normalized = normalizeData(message, ['text', 'recipient_id', 'voice_url', 'attachment_id']);
             if (_.isString(normalized.text)) messageData.text = normalized.text;
             if (!_.isNoValue(normalized.recipient_id)) {
                 messageData.recipient_id = normalized.recipient_id as string;
+            }
+            // Anything that isn't empty goes through as it came. A file that isn't
+            // a string is the caller's mistake, and Zod says so plainly ("expected
+            // string") — better than the "text is required" thrown further down.
+            // Keys outside the list above are dropped, including the pre-release
+            // `voice_id`: a caller still sending it gets "text is required" rather
+            // than a message that quietly lost its voice.
+            if (!_.isNoValue(normalized.voice_url) && normalized.voice_url !== '') {
+                messageData.voice_url = normalized.voice_url as string;
+            }
+            if (!_.isNoValue(normalized.attachment_id) && normalized.attachment_id !== '') {
+                messageData.attachment_id = normalized.attachment_id as string;
             }
         } else if (_.isString(message)) {
             messageData.text = message;
         }
 
-        if (!(_.isString(messageData.text) && messageData.text.length)) {
-            throw new Error('message text is required');
+        const hasText = _.isString(messageData.text) && messageData.text.length > 0;
+        const hasFile = 'voice_url' in messageData || 'attachment_id' in messageData;
+
+        // A file is a whole message by itself, and text beside it is the caption,
+        // so an empty one is dropped instead of being sent.
+        if (!hasText) {
+            if (!hasFile) {
+                throw new Error('message text is required');
+            }
+            delete messageData.text;
         }
 
         // Resolve chat id (path param) and split off the rest as body.chat (optional).

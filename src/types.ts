@@ -261,10 +261,20 @@ export interface MessageButton {
     webhook?: MessageButtonWebhook;
 }
 
-/** Input for POST /chats/{chat_id}/messages (items inside `messages[]`). */
+/**
+ * Input for POST /chats/{chat_id}/messages (items inside `messages[]`).
+ *
+ * Each item needs text or a file. `attachment_id` comes from the resource
+ * pipeline (`api.resourceUploadUrl` → upload → `api.resourceVerify` →
+ * `api.resourceShow` until `ready`) and can be sent to several chats that keep
+ * their files in the same bucket. `voice_url` (deprecated) is a link the backend
+ * downloads. Next to a file, `text` is the caption.
+ */
 export interface MessageInput {
-    text: string;
+    text?: string;
     recipient_id?: string;
+    voice_url?: string;
+    attachment_id?: string;
     extra?: ExtraMap;
     buttons?: MessageButton[];
     disable_notification?: boolean;

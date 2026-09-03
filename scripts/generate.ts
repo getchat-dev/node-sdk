@@ -157,6 +157,26 @@ function emitZod(schema: Schema, depth = 0): string {
         return `${expr}.refine((v) => ${JSON.stringify(groups)}.some((g) => g.every((k) => (v as Record<string, unknown>)[k] != null)), { message: ${JSON.stringify(msg)} })`;
     };
 
+    // The opposite rule. `not: { required: [a, b] }` is how JSON Schema says "these
+    // two can't both be set". Nothing in openapi.yml uses it right now: sendMessage
+    // did for `voice_url` vs `voice_id`, and when `attachment_id` replaced
+    // `voice_id` the spec kept that rule in prose only. Kept so a spec that brings
+    // it back is enforced without touching the generator. Reads `!= null` like the
+    // check above, so an explicit `null` doesn't count as set.
+    const exclusiveKeys = (): string[] | null => {
+        const not = schema.not;
+        if (!not || typeof not !== 'object') return null;
+        const keys = (not as Schema).required;
+        return Array.isArray(keys) && keys.length > 1 ? (keys as string[]) : null;
+    };
+    const withExclusiveKeys = (expr: string): string => {
+        if (!hasBaseObject) return expr;
+        const keys = exclusiveKeys();
+        if (!keys) return expr;
+        const msg = `these keys are mutually exclusive: ${keys.join(' | ')}`;
+        return `${expr}.refine((v) => !${JSON.stringify(keys)}.every((k) => (v as Record<string, unknown>)[k] != null), { message: ${JSON.stringify(msg)} })`;
+    };
+
     // oneOf / anyOf — Zod union. (We don't model `oneOf` strictness vs `anyOf` overlap;
     // Zod's `union` matches the first successful branch, which is fine for our shapes.)
     // Skipped when the members are required-groups on a base object (handled above).
@@ -246,7 +266,7 @@ function emitZod(schema: Schema, depth = 0): string {
                 schema.additionalProperties === true ? 'z.unknown()' : emitZod(schema.additionalProperties, depth);
             obj += `.catchall(${valueSchema})`;
         }
-        return withRequiredGroups(withPropCount(obj));
+        return withExclusiveKeys(withRequiredGroups(withPropCount(obj)));
     }
 
     return 'z.unknown()';

@@ -264,6 +264,7 @@ const chatSendMessageInput = z.object({
                     .object({
                         text: z.string().max(4096).nullable().optional(),
                         voice_url: z.url().max(2048).optional(),
+                        attachment_id: z.string().max(64).optional(),
                         extra: z
                             .record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
                             .refine((v) => Object.keys(v as object).length <= 100, {
@@ -276,10 +277,10 @@ const chatSendMessageInput = z.object({
                     })
                     .refine(
                         (v) =>
-                            [['text'], ['voice_url']].some((g) =>
+                            [['text'], ['voice_url'], ['attachment_id']].some((g) =>
                                 g.every((k) => (v as Record<string, unknown>)[k] != null),
                             ),
-                        { message: 'one of these key groups is required: text | voice_url' },
+                        { message: 'one of these key groups is required: text | voice_url | attachment_id' },
                     ),
             )
             .max(50),
@@ -367,6 +368,44 @@ const chatSetS3CredentialsInput = z.object({
 });
 export type ChatSetS3CredentialsInput = z.infer<typeof chatSetS3CredentialsInput> & RequestControlOptions;
 export type ChatSetS3CredentialsResponse = { status?: boolean; modified?: boolean };
+
+const resourceUploadUrlInput = z.object({
+    body: z.object({
+        type: z.enum(['voice']),
+        mime: z.string(),
+        name: z.string().max(255).optional(),
+        size: z.number().int().min(1).optional(),
+        chat_id: z.string().max(255).optional(),
+    }),
+});
+export type ResourceUploadUrlInput = z.infer<typeof resourceUploadUrlInput> & RequestControlOptions;
+export type ResourceUploadUrlResponse = {
+    status?: boolean;
+    resource_id?: string;
+    upload_url?: string;
+    method?: string;
+    headers?: Record<string, string>;
+    max_size?: number;
+    max_duration?: number;
+    url_expires_at?: string;
+    expires_at?: string;
+};
+
+const resourceVerifyInput = z.object({
+    path: z.object({
+        resource_id: z.string(),
+    }),
+});
+export type ResourceVerifyInput = z.infer<typeof resourceVerifyInput> & RequestControlOptions;
+export type ResourceVerifyResponse = S.ResourceStatus;
+
+const resourceShowInput = z.object({
+    path: z.object({
+        resource_id: z.string(),
+    }),
+});
+export type ResourceShowInput = z.infer<typeof resourceShowInput> & RequestControlOptions;
+export type ResourceShowResponse = S.ResourceStatus;
 
 const userCreateInput = z.object({
     query: z
@@ -743,6 +782,31 @@ export function createOperations(transport: Transport) {
             const url = `chats/${String((parsed as { path: Record<string, unknown> }).path.chat_id)}/s3-credentials`;
             const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
             return transport.requestApi<T>(url, body, 'put', undefined, undefined, undefined, control);
+        },
+
+        /** Get an upload URL for a file */
+        resourceUploadUrl: async <T = ResourceUploadUrlResponse>(input: ResourceUploadUrlInput): Promise<T> => {
+            const parsed = resourceUploadUrlInput.parse(input);
+            const control = pickRequestControl(input);
+            const url = 'resources/upload-url';
+            const body = (parsed as { body?: Record<string, unknown> } | undefined)?.body;
+            return transport.requestApi<T>(url, body, 'post', undefined, undefined, undefined, control);
+        },
+
+        /** Verify an uploaded file */
+        resourceVerify: async <T = ResourceVerifyResponse>(input: ResourceVerifyInput): Promise<T> => {
+            const parsed = resourceVerifyInput.parse(input);
+            const control = pickRequestControl(input);
+            const url = `resources/${String((parsed as { path: Record<string, unknown> }).path.resource_id)}/verify`;
+            return transport.requestApi<T>(url, undefined, 'post', undefined, undefined, undefined, control);
+        },
+
+        /** Resource status */
+        resourceShow: async <T = ResourceShowResponse>(input: ResourceShowInput): Promise<T> => {
+            const parsed = resourceShowInput.parse(input);
+            const control = pickRequestControl(input);
+            const url = `resources/${String((parsed as { path: Record<string, unknown> }).path.resource_id)}`;
+            return transport.requestApi<T>(url, undefined, 'get', undefined, undefined, undefined, control);
         },
 
         /** Create user */

@@ -23,6 +23,9 @@ import type {
     ChatUpdateMessageResponse,
     ChatUpdateParticipantRightsResponse,
     ChatUpdateResponse,
+    ResourceShowResponse,
+    ResourceUploadUrlResponse,
+    ResourceVerifyResponse,
     TenantClearDataResponse,
     TenantSetFirebaseConfigForJsResponse,
     TenantSetFirebaseFcmVapidResponse,
@@ -157,6 +160,9 @@ export function _apiOnlyReturns() {
         chatDeleteParticipantRights: emby.api.chatDeleteParticipantRights(apiInput.chatDeleteParticipantRights),
         chatSetWebhook: emby.api.chatSetWebhook(apiInput.chatSetWebhook),
         chatSetS3Credentials: emby.api.chatSetS3Credentials(apiInput.chatSetS3Credentials),
+        resourceUploadUrl: emby.api.resourceUploadUrl(apiInput.resourceUploadUrl),
+        resourceVerify: emby.api.resourceVerify(apiInput.resourceVerify),
+        resourceShow: emby.api.resourceShow(apiInput.resourceShow),
         userAddFcmToken: emby.api.userAddFcmToken(apiInput.userAddFcmToken),
         tenantSetS3Credentials: emby.api.tenantSetS3Credentials(apiInput.tenantSetS3Credentials),
         tenantSetWebhookSettings: emby.api.tenantSetWebhookSettings(apiInput.tenantSetWebhookSettings),
@@ -186,6 +192,11 @@ export type _aChatSetWebhook = Expect<Equal<Awaited<ApiOnlyReturns['chatSetWebho
 export type _aChatSetS3Credentials = Expect<
     Equal<Awaited<ApiOnlyReturns['chatSetS3Credentials']>, ChatSetS3CredentialsResponse>
 >;
+export type _aResourceUploadUrl = Expect<
+    Equal<Awaited<ApiOnlyReturns['resourceUploadUrl']>, ResourceUploadUrlResponse>
+>;
+export type _aResourceVerify = Expect<Equal<Awaited<ApiOnlyReturns['resourceVerify']>, ResourceVerifyResponse>>;
+export type _aResourceShow = Expect<Equal<Awaited<ApiOnlyReturns['resourceShow']>, ResourceShowResponse>>;
 export type _aUserAddFcmToken = Expect<Equal<Awaited<ApiOnlyReturns['userAddFcmToken']>, UserAddFcmTokenResponse>>;
 export type _aTenantSetS3Credentials = Expect<
     Equal<Awaited<ApiOnlyReturns['tenantSetS3Credentials']>, TenantSetS3CredentialsResponse>

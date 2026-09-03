@@ -1,0 +1,14 @@
+{
+  "status": 202,
+  "body": {
+    "status": true,
+    "resource": {
+      "id": "res-abc123",
+      "type": "voice",
+      "status": "verifying",
+      "attachment_id": null,
+      "error": null,
+      "expires_at": "2026-09-17T11:00:00.000Z"
+    }
+  }
+}

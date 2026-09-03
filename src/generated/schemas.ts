@@ -114,6 +114,42 @@ export const ParticipantResourceSchema = z.object({
 });
 export type ParticipantResource = z.infer<typeof ParticipantResourceSchema>;
 
+export const AttachmentVariantSchema = z.object({
+    url: z.url().optional(),
+    mime: z.string().optional(),
+    size: z.number().int().optional(),
+    width: z.number().int().optional(),
+    height: z.number().int().optional(),
+});
+export type AttachmentVariant = z.infer<typeof AttachmentVariantSchema>;
+
+export const AttachmentSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    mime: z.string(),
+    size: z.number().int(),
+    url: z.url(),
+    width: z.number().int().nullable().optional(),
+    height: z.number().int().nullable().optional(),
+    duration: z.number().int().nullable().optional(),
+    is_image: z.boolean().nullable().optional(),
+    is_video: z.boolean().nullable().optional(),
+    is_audio: z.boolean().nullable().optional(),
+    is_document: z.boolean().nullable().optional(),
+    is_voice: z.boolean().nullable().optional(),
+    waveform: z.array(z.number().int().min(0).max(31)).max(100).nullable().optional(),
+    resizes: z.record(z.string(), z.url()).optional(),
+    variants: z
+        .object({
+            original: AttachmentVariantSchema.optional(),
+            playable: AttachmentVariantSchema.optional(),
+            preview: AttachmentVariantSchema.optional(),
+            sizes: z.record(z.string(), AttachmentVariantSchema).optional(),
+        })
+        .optional(),
+});
+export type Attachment = z.infer<typeof AttachmentSchema>;
+
 export const MessageResourceSchema = z.object({
     id: z.string(),
     seq: z.number().int(),
@@ -127,6 +163,7 @@ export const MessageResourceSchema = z.object({
     extra: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])),
     recipient_id: z.string().optional(),
     buttons: z.array(ButtonSchema).max(20).optional(),
+    attachments: z.array(AttachmentSchema).optional(),
 });
 export type MessageResource = z.infer<typeof MessageResourceSchema>;
 
@@ -172,6 +209,21 @@ export const StatusErrorSchema = z.object({
     message: z.string().optional(),
 });
 export type StatusError = z.infer<typeof StatusErrorSchema>;
+
+export const ResourceStatusSchema = z.object({
+    status: z.boolean().optional(),
+    resource: z
+        .object({
+            id: z.string().optional(),
+            type: z.enum(['voice']).optional(),
+            status: z.enum(['pending', 'verifying', 'processing', 'ready', 'failed']).optional(),
+            attachment_id: z.string().nullable().optional(),
+            error: z.string().nullable().optional(),
+            expires_at: z.string().nullable().optional(),
+        })
+        .optional(),
+});
+export type ResourceStatus = z.infer<typeof ResourceStatusSchema>;
 
 export const ValidationErrorSchema = z.object({
     message: z.string().optional(),

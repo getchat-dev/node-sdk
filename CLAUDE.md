@@ -13,8 +13,8 @@ Anything edited under `src/` is public surface area — version is bumped in `pa
 
 ## Commands
 
-- `npm test` — runs node's built-in test runner on TS sources via `tsx` (6 unit + 22 integration files). No compilation, tests import from `src/` directly.
-- `npm run test:live` — opt-in E2E against a real tenant (needs `.env` with `EMBY_API_TOKEN` + `EMBY_BASE_URL`; 50 tests across happy-path / wire-format regressions / edge cases). Suites skip themselves if creds missing. Runs serially via `--test-concurrency=1` because each `before/after` calls `tenant.clearData({ sync: true })` and parallel suites would race-wipe each other. **Never point at production.** See `test/live/README.md`.
+- `npm test` — runs node's built-in test runner on TS sources via `tsx` (7 unit + 23 integration files). No compilation, tests import from `src/` directly.
+- `npm run test:live` — opt-in E2E against a real tenant (needs `.env` with `EMBY_API_TOKEN` + `EMBY_BASE_URL`; happy path, wire-format regressions, edge cases, rights, and voice uploads). Suites skip themselves if creds missing. Runs serially via `--test-concurrency=1` because each `before/after` calls `tenant.clearData({ sync: true })` and parallel suites would race-wipe each other. **Never point at production.** See `test/live/README.md`.
 - `npm run typecheck` — `tsc --noEmit` across src + test.
 - `npm run build` — cleans `dist/`, compiles `tsconfig.cjs.json` → `dist/cjs`, `tsconfig.esm.json` → `dist/esm`, then writes `{"type":"commonjs"}` / `{"type":"module"}` stub `package.json` inside each subdir so Node resolves module kind correctly.
 - `npm run coverage:ci` — runs tests with `--experimental-test-coverage` and gates at 90% (see `scripts/coverage-gate.js`; threshold is 90%, not 100%, because TS emit introduces unavoidable compiler-prelude "uncovered" lines).
@@ -23,7 +23,7 @@ Anything edited under `src/` is public surface area — version is bumped in `pa
 
 Smoke-verifying a change without a real backend: run the relevant test file (`node --test --import tsx 'test/integration/<name>.test.ts'`) or start the mock server via `test/helpers/mockServer.ts`.
 
-`.env` (copy from `.env.example`): `EMBY_ID`, `EMBY_SECRET`, `EMBY_API_TOKEN`, `EMBY_BASE_URL`. Add `NODE_TLS_REJECT_UNAUTHORIZED=0` if your dev backend uses a self-signed cert.
+`.env` (copy from `.env.example`): `EMBY_ID`, `EMBY_SECRET`, `EMBY_API_TOKEN`, `EMBY_BASE_URL`. The voice-upload live suite also reads `TEST_S3_*` (a scratch bucket it points the tenant at); without them it only checks that presigning is refused. The suite's pipeline tests (a file reaching `ready`) also need the backend's media queue worker running — without it resources sit in `verifying` forever and those tests time out. See `test/live/README.md`. Add `NODE_TLS_REJECT_UNAUTHORIZED=0` if your dev backend uses a self-signed cert.
 
 ## Dependency policy
 
@@ -49,7 +49,8 @@ src/
 
 test/
 ├── helpers/              — mockServer, sdkFactory, loadFixture, seededRandom
-├── unit/*.test.ts        — helpers, signing, processUserRights, paginate
+├── unit/*.test.ts        — helpers, signing, processUserRights, paginate, S3 request signing
+│                         (the last one guards the live suite's own AWS SigV4 helper)
 ├── integration/*.test.ts — per-method tests against in-process mock server
 ├── types/*.test-d.ts     — compile-time type assertions, enforced by `npm run typecheck`,
 │                           NOT run by `node --test`. `response-types` pins the response-type
@@ -108,6 +109,7 @@ The per-call fields (`signal`/`timeout`/`retries`/`retryDelay`) ride every `.api
 - normalizes chat/participant payloads (`normalizeChat`, `normalizeParticipant`);
 - clamps pagination (`Math.max(page,1)`, `Math.min(limit,1000)`);
 - splits chat id out of `sendMessage`/`updateMessage`/`deleteMessage` arguments into the `path` slot;
+- accepts a file on `sendMessage` (1.26): the object form of `MessageTextInput` also takes `attachment_id` (from the resource pipeline: `.api.resourceUploadUrl` → PUT to S3 → `.api.resourceVerify` → poll `.api.resourceShow` until `ready`; reusable within a bucket) or the deprecated `voice_url` (a link the backend downloads). The spec says one or the other only in prose, so the SDK doesn't enforce it — the backend answers 422. With a file, `text` is optional and an empty one is dropped rather than sent as an empty caption — `"message text is required"` still throws when there is neither. Unknown keys are dropped, so the pre-release `voice_id` also ends in that error;
 - preserves the original error messages (`"chat id isn't passed"`, `"message text is required"`, etc.) so callers' regex matches keep working.
 
 The public signatures in `src/index.ts` are stable consumer API and **must not be changed** without a version bump. The wire format they produce is now spec-aligned (e.g. `is_deleted: true` boolean, was `'1'` string before 1.13; `with_users=1` snake_case wire, was buggy `withUsers=1` before — backend silently ignored it). Backend is lenient and accepts both forms in most places, but wherever live tests revealed a divergence, the spec was patched and the adapter brought into line.
@@ -131,8 +133,8 @@ The four `.api.*` list operations all share `limit`/`page` + `meta`/`pagination`
 
 `scripts/generate.ts` (~350 LOC) parses `openapi.yml` (via `js-yaml`, devDep) and emits:
 
-- `src/generated/schemas.ts` — one `XSchema` + `type X = z.infer<typeof XSchema>` per `components.schemas.X`. Topologically sorted so `$ref` chains resolve. Components currently shipped: `User`, `UserResource`, `ParticipantResource`, `ParticipantInput`, `ChatResource`, `MessageResource`, `Avatar` (URL-string OR `{kind, color, initials}` placeholder via `oneOf`), `Button` (shared by sendMessage/updateMessage).
-- `src/generated/operations.ts` — `createOperations(transport) → { chatList, chatCreate, chatShow, … }`, **30 methods** (29 chat/user/tenant + `tenantClearData`). Each parses its input with Zod, fills path params into the URL template, and dispatches through `transport.requestApi`.
+- `src/generated/schemas.ts` — one `XSchema` + `type X = z.infer<typeof XSchema>` per `components.schemas.X`. Topologically sorted so `$ref` chains resolve. Components currently shipped include `User`, `UserResource`, `ParticipantResource`, `ParticipantInput`, `ChatResource`, `MessageResource`, `Attachment` + `AttachmentVariant` (files on a message), `ResourceStatus` (verify/show answer), `Avatar` (URL-string OR `{kind, color, initials}` placeholder via `oneOf`), `Button` (shared by sendMessage/updateMessage).
+- `src/generated/operations.ts` — `createOperations(transport) → { chatList, chatCreate, chatShow, … }`, **34 methods** (30 chat/user/tenant + `tenantClearData` + `resourceUploadUrl`/`resourceVerify`/`resourceShow`). Each parses its input with Zod, fills path params into the URL template, and dispatches through `transport.requestApi`.
 
 Input shape follows the `openapi-fetch` convention:
 
@@ -156,6 +158,7 @@ Each method is typed `async <T = XResponse>(...): Promise<T>` — the default `T
 
 - Zod 4's `z.enum` only accepts string literals, so non-string enums (e.g. `[0, 1]`) emit `z.union([z.literal(0), z.literal(1)])`.
 - Zod 4 has no built-in `min`/`maxProperties`, so OpenAPI `minProperties: N` / `maxProperties: N` become `.refine((v) => Object.keys(v).length >= N, ...)` / `<= N`.
+- A `not: { required: [a, b] }` sibling of an object becomes a `.refine()` rejecting "both at once" (nothing in the spec uses it today; `voice_url` vs `voice_id` did before `attachment_id` replaced `voice_id`). Its mirror, an `anyOf` of pure `required` groups, is the "at least one of" refine.
 - `oneOf` / `anyOf` → `z.union([...])`. `Avatar` and other discriminated-ish unions ride this path; we don't model strictness, the first matching branch wins.
 - `allOf` → intersection: a single-member `allOf` (the `$ref` + description pattern) collapses to that member; multiple members nest via `z.intersection`.
 - Path-param substitution **does not** call `encodeURIComponent` — `requestApi` runs `encodeURI()` on the full URL, and double-encoding would produce `%252F` instead of `%2F`. This matches the behavior of the hand-written methods.
@@ -172,6 +175,9 @@ The spec is treated as authoritative documentation of the **real backend wire fo
 - `tenant.clearData` `sync` param was declared `in: path` (spec bug); patched to `in: query`.
 - `chat.create` for `type: private` requires `participants` (empirical; not enforced in spec).
 - `chatDeleteParticipants` returns `200` but does not actually remove the user (backend quirk; documented as `t.diagnostic` in live tests rather than failed assertion).
+- `resource.uploadUrl` / `resource.verify` / `resource.show` (1.26) are the upload pipeline: presigned S3 URL + `resource_id` → the caller PUTs the bytes (never through the SDK) → verify runs the cheap checks synchronously and queues the rest → poll show until `ready` (`attachment_id`) or `failed` (`error`). Without S3 credentials on the tenant (or on the chat, when `chat_id` is passed) upload-url answers 422 `{status:false, message}`. Mock coverage in `test/integration/resources.test.ts`, including that the POSTs are not retried and the GET is. Verify and show both send `Retry-After` (seconds, 3 today) until the status is final — declared in the spec, but the generator ignores response headers and `requestApi` returns the body only, so it never reaches the caller. Exposing it would need a transport change (e.g. returning headers alongside the body), not a spec one.
+- Verified live (2026-09-24, dev tenant + a real bucket, `test/live/voice-messages.test.ts`): `max_size` 10 MB, `max_duration` 1800 s; upload is signed `x-amz-acl: private`. Presign refuses a bad mime (`"The mime is not a supported format for a voice resource."`). Verify refuses a missing upload (`"File for resource … is not uploaded yet"`), a PNG (`"Uploaded file is not a supported voice format"`) and a real MP3 declared as wav (`"Uploaded file is not audio/wav as declared"`). Unknown resource → 404 on verify and show. Unknown `attachment_id` on send → 422 `"Unknown attachment_id: …"`. **The backend refuses `voice_url` + `attachment_id` together** during validation, before looking the id up: `"The messages.0.attachment_id field prohibits messages.0.voice_url from being present."`
+- **Not yet verified live:** anything past `verifying`. On the dev tenant no worker consumes the `media:voice` queue (the backend's plain `queue:work` listens to the default connection only — see the backend's `docs/file-resources-plan.md`), so resources never leave `verifying`. The live tests for `ready`, the `attachments` on a read-back message (`audio/ogg`, private original), reuse across chats, and a wav with an unusual codec are written from the spec and fail until that worker runs.
 
 When you change `openapi.yml`, run `npm run generate` then `npm test` then `npm run test:live` (if you have creds) — the latter re-validates against the real backend and catches drift.
 

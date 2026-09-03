@@ -23,6 +23,36 @@ entire chat/user/message state. Use a dedicated staging/dev tenant.
    EMBY_BASE_URL=https://your-staging-host.example
    ```
 3. Node 22+ (for `--env-file-if-exists`).
+4. Optional, for the voice-upload suite — a **scratch** S3 bucket the tests may
+   write into:
+   ```
+   TEST_S3_ACCESS_KEY=...
+   TEST_S3_SECRET_KEY=...
+   TEST_S3_ENDPOINT_URL=https://s3.example.com
+   TEST_S3_BUCKET=getchat-sdk-tests
+   # optional: TEST_S3_REGION, TEST_S3_PATH_STYLE, TEST_S3_PUBLIC_URL, TEST_S3_CDN_URL
+   ```
+   The suite hands these to the tenant (`PUT /s3-credentials`) and then requires
+   the whole upload path to work. Two things to know before you fill them in:
+
+   - **The bucket is written to.** The suite deletes every file it uploads (that
+     is its last test, and the teardown mops up after a failure), but a crash
+     between the two can still leave one behind — and `tenant.clearData` wipes
+     chats and messages, never the bucket. Use a throwaway bucket.
+   - **Credentials can't be taken back.** The endpoint requires all four fields,
+     so they can be replaced but not removed. The "S3 is not set up" refusal is
+     therefore only observable on a tenant nobody has configured yet — which is
+     why that check runs first in the suite.
+
+   Without these the voice suite still runs: it asserts the refusal and skips the
+   parts that need a bucket.
+
+   `s3-credentials.test.ts` is the preflight for exactly these four values — it
+   writes and deletes a file in the bucket itself, needs no tenant, and says which
+   of key / region / addressing style / bucket ACLs is the problem. Run it first
+   when an upload fails. The signing it uses is pinned against AWS's own worked
+   example in `test/unit/s3-signing.test.ts`, so a failure there is about the
+   bucket, never about the test.
 
 ### Self-signed certificates (dev backends)
 
@@ -61,6 +91,8 @@ node --test --env-file=.env --import tsx test/live/happy-path.test.ts
 | `wire-format.test.ts` | A/B probes for 5 openapi↔code disputes (with_owners, with_users/withUsers, isDeleted/isEdited, typing endpoint shape, is_deleted true vs '1') |
 | `edge-cases.test.ts` | adversarial inputs: duplicates, 404s, length/maxItems/maxProperties boundaries, unicode/emoji/path-traversal, auth failures, pagination, idempotency |
 | `participant-rights.test.ts` | PUT/GET/DELETE rights round-trip: set → read → flip → null-clear → delete-all, plus mute enforcement on the send API |
+| `s3-credentials.test.ts` | preflight for `TEST_S3_*`: writes, reads and deletes a small file in the bucket directly (no backend), so a wrong key, region, addressing style or an ACL-less bucket is named before anything else blames the API |
+| `voice-messages.test.ts` | the resource pipeline: presign → real `PUT` to S3 → verify → poll until `ready` → send by `attachment_id` → read the attachment back; the 422 when the tenant has no S3, the format check on verify, reuse of an attachment across chats, and the backend refusing `voice_url` + `attachment_id` together. Needs `TEST_S3_*` for everything past the no-S3 check. |
 | `rights-entry-points.test.ts` | rights arriving via `createChat` / `addParticipantsToChat` / `sendMessage` participants: cross-contamination, `{}`/null rights, conflicting duplicates, owner self-mute, re-add upsert-or-ignore, sender self-mute, `chat.create` contract |
 
 ## Interpreting results

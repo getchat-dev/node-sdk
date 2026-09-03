@@ -1,0 +1,14 @@
+{
+  "status": 200,
+  "body": {
+    "status": true,
+    "resource": {
+      "id": "res-abc123",
+      "type": "voice",
+      "status": "failed",
+      "attachment_id": null,
+      "error": "Uploaded file is not a supported audio format",
+      "expires_at": null
+    }
+  }
+}

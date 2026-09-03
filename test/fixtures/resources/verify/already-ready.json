@@ -1,0 +1,14 @@
+{
+  "status": 200,
+  "body": {
+    "status": true,
+    "resource": {
+      "id": "res-abc123",
+      "type": "voice",
+      "status": "ready",
+      "attachment_id": "att-abc123",
+      "error": null,
+      "expires_at": null
+    }
+  }
+}

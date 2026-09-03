@@ -100,8 +100,9 @@ describe('generated .api.* (openapi-driven, Zod-validated)', () => {
             );
         });
 
-        test('Zod rejects a message with neither text nor voice_url', async () => {
-            // The item requires text OR voice_url (anyOf); an empty {} satisfies neither.
+        test('Zod rejects a message with neither text nor a file', async () => {
+            // The item requires text OR voice_url OR attachment_id (anyOf); an
+            // empty {} satisfies none of them.
             await assert.rejects(
                 sdk.api.chatSendMessage({
                     path: { chat_id: 'c1' },
@@ -110,8 +111,9 @@ describe('generated .api.* (openapi-driven, Zod-validated)', () => {
                         messages: [{} as { text: string }],
                     },
                 }),
-                (e) => e instanceof ZodError,
+                (e) => e instanceof ZodError && /text \| voice_url \| attachment_id/.test(e.message),
             );
+            assert.equal(server.requests.length, 0);
         });
 
         test('a voice-only message (no text) is accepted', async () => {
@@ -125,6 +127,93 @@ describe('generated .api.* (openapi-driven, Zod-validated)', () => {
             });
             const body = server.lastRequest!.body as JsonBody;
             assert.deepEqual(body.messages, [{ voice_url: 'https://cdn.example.com/v.ogg' }]);
+        });
+
+        test('a message carrying only attachment_id is accepted', async () => {
+            server.respondWith({ status: 200, body: { status: true, message_ids: ['m1'] } });
+            await sdk.api.chatSendMessage({
+                path: { chat_id: 'c1' },
+                body: {
+                    user: { id: 'u1', name: 'U' },
+                    messages: [{ attachment_id: 'att-abc123' }],
+                },
+            });
+            const body = server.lastRequest!.body as JsonBody;
+            assert.deepEqual(body.messages, [{ attachment_id: 'att-abc123' }]);
+        });
+
+        test('the old voice_id field is dropped, so a message with only it is refused', async () => {
+            // voice_id was replaced by attachment_id. Zod strips unknown keys, so a
+            // caller still sending it gets a clear "needs text or a file" error
+            // instead of a message that silently loses its voice.
+            await assert.rejects(
+                sdk.api.chatSendMessage({
+                    path: { chat_id: 'c1' },
+                    body: {
+                        user: { id: 'u1', name: 'U' },
+                        messages: [{ voice_id: 'f-abc123' } as unknown as { text: string }],
+                    },
+                }),
+                (e) => e instanceof ZodError,
+            );
+            assert.equal(server.requests.length, 0);
+        });
+
+        test('voice_url and attachment_id together are not refused client-side', async () => {
+            // The spec calls them mutually exclusive in prose only — there is no
+            // schema rule any more, so the SDK sends both and the backend decides.
+            server.respondWith({ status: 200, body: { status: true, message_ids: ['m1'] } });
+            await sdk.api.chatSendMessage({
+                path: { chat_id: 'c1' },
+                body: {
+                    user: { id: 'u1', name: 'U' },
+                    messages: [{ voice_url: 'https://cdn.example.com/v.ogg', attachment_id: 'att-abc123' }],
+                },
+            });
+            const body = server.lastRequest!.body as JsonBody;
+            assert.deepEqual(body.messages, [
+                { voice_url: 'https://cdn.example.com/v.ogg', attachment_id: 'att-abc123' },
+            ]);
+        });
+
+        test('an empty attachment_id passes Zod — it has no minimum length', async () => {
+            // The anyOf only checks the key is present, and the spec sets no
+            // minLength, so '' reaches the backend. Pinned so a change is noticed.
+            server.respondWith({ status: 200, body: { status: true, message_ids: ['m1'] } });
+            await sdk.api.chatSendMessage({
+                path: { chat_id: 'c1' },
+                body: { user: { id: 'u1', name: 'U' }, messages: [{ attachment_id: '' }] },
+            });
+            const body = server.lastRequest!.body as JsonBody;
+            assert.deepEqual(body.messages, [{ attachment_id: '' }]);
+        });
+
+        test('the file rules apply to every message of a batch, not just the first', async () => {
+            await assert.rejects(
+                sdk.api.chatSendMessage({
+                    path: { chat_id: 'c1' },
+                    body: {
+                        user: { id: 'u1', name: 'U' },
+                        messages: [{ text: 'fine' }, { attachment_id: 'f'.repeat(65) }],
+                    },
+                }),
+                (e) => e instanceof ZodError,
+            );
+            assert.equal(server.requests.length, 0);
+        });
+
+        test('Zod rejects an attachment_id over 64 chars', async () => {
+            await assert.rejects(
+                sdk.api.chatSendMessage({
+                    path: { chat_id: 'c1' },
+                    body: {
+                        user: { id: 'u1', name: 'U' },
+                        messages: [{ attachment_id: 'f'.repeat(65) }],
+                    },
+                }),
+                (e) => e instanceof ZodError,
+            );
+            assert.equal(server.requests.length, 0);
         });
     });
 
@@ -311,9 +400,9 @@ describe('generated .api.* (openapi-driven, Zod-validated)', () => {
     });
 
     describe('surface', () => {
-        test('.api exposes all 31 operationIds', () => {
+        test('.api exposes all 34 operationIds', () => {
             const names = Object.keys(sdk.api).sort();
-            assert.equal(names.length, 31);
+            assert.equal(names.length, 34);
             for (const expected of [
                 'chatList',
                 'chatCreate',
@@ -332,6 +421,9 @@ describe('generated .api.* (openapi-driven, Zod-validated)', () => {
                 'chatSendTyping',
                 'chatSetWebhook',
                 'chatSetS3Credentials',
+                'resourceUploadUrl',
+                'resourceVerify',
+                'resourceShow',
                 'userCreate',
                 'userShow',
                 'userUpdate',

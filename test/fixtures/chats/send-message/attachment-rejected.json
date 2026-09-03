@@ -1,0 +1,7 @@
+{
+  "status": 422,
+  "body": {
+    "status": false,
+    "message": "Attachment att-widget-1 was not produced by the resource pipeline"
+  }
+}

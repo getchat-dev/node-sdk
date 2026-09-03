@@ -18,6 +18,14 @@ describe('per-call cancellation & overrides', () => {
     const sdk = (opts = {}) =>
         new Emby({ ...DEFAULTS, base_url: server.baseUrl, api_url: server.baseUrl, options: opts });
 
+    /** Wait until the mock server has written down an incoming request, or give up. */
+    const firstRequestSeen = async (): Promise<void> => {
+        for (let i = 0; i < 200 && server.requests.length === 0; i++) {
+            await new Promise((r) => setTimeout(r, 5));
+        }
+        assert.equal(server.requests.length, 1, 'the request never reached the mock server');
+    };
+
     test('AbortSignal cancels an in-flight request (not a timeout)', async () => {
         server.respondWith({ status: 200, body: { ok: true }, delayMs: 300 });
         const ac = new AbortController();
@@ -33,7 +41,12 @@ describe('per-call cancellation & overrides', () => {
         server.respondWith({ status: 200, body: { ok: true }, delayMs: 300 });
         const ac = new AbortController();
         const p = sdk({ retries: 3, retryDelay: 1 }).api.chatShow({ path: { chat_id: 'c1' }, signal: ac.signal });
-        setTimeout(() => ac.abort(), 20);
+        // Cancel only once the server has seen the first attempt. On a timer the
+        // count below turns into a race: on a busy machine the socket can die
+        // before the server writes the request down, and then the test fails over
+        // the mock's records rather than over a retry.
+        await firstRequestSeen();
+        ac.abort();
         await assert.rejects(p);
         assert.equal(server.requests.length, 1);
     });

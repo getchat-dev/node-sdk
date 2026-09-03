@@ -828,21 +828,50 @@ paths:
                     anyOf:
                       - required: [text]
                       - required: [voice_url]
-                    description: Each message needs `text` or `voice_url`.
+                      - required: [attachment_id]
+                    description: Each message needs `text` or `voice_url` or `attachment_id`.
                     properties:
                       text:
                         type: string
                         nullable: true
                         maxLength: 4096
-                        description: Required unless `voice_url` is set.
+                        description: >-
+                          Required unless `voice_url` or `attachment_id` is set;
+                          alongside a file it is the caption.
                       voice_url:
                         type: string
                         format: uri
                         maxLength: 2048
+                        deprecated: true
                         description: >-
+                          DEPRECATED — new integrations should use the resource
+                          pipeline and `attachment_id`. Kept working for those
+                          already on it.
+
+
                           http(s) URL of a voice recording. The original is
-                          downloaded and attached before the message is
-                          stored; transcoding to ogg/opus happens async.
+                          downloaded and attached before the message is stored;
+                          unlike the pipeline, the message is delivered right
+                          away and transcoding to ogg/opus catches up later, so
+                          a format no browser plays arrives unplayable.
+                      attachment_id:
+                        type: string
+                        maxLength: 64
+                        description: >-
+                          Id of an attachment produced by the resource pipeline
+                          (POST /resources/upload-url → upload → verify →
+                          `status: ready`). The file itself is not sent here; it
+                          is already verified and processed, so sending costs no
+                          storage round-trip.
+
+
+                          Only pipeline attachments are accepted. An attachment
+                          created by the chat widget or by `voice_url` carries
+                          no verification mark and no storage location, so it is
+                          rejected (422) — as is one stored where this chat does
+                          not keep its files. Within one bucket an attachment is
+                          reusable: the same id may be sent to several chats.
+                          Mutually exclusive with `voice_url`.
                       extra:
                         type: object
                         maxProperties: 100
@@ -1176,6 +1205,227 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ValidationError'
+
+  /resources/upload-url:
+    post:
+      summary: Get an upload URL for a file
+      operationId: resource.uploadUrl
+      description: >-
+        Step 1 of 4. Issues a `resource_id` and a presigned S3 URL. Upload the
+        file there with `PUT`, then call verify, poll the status and send the
+        message with the `attachment_id` you get back. The file never passes
+        through this API.
+
+
+        The uploaded object is **private**: until it is verified it has no
+        public address. Only `type: voice` is supported today.
+      tags:
+        - Resources
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - type
+                - mime
+              properties:
+                type:
+                  type: string
+                  enum: [voice]
+                mime:
+                  type: string
+                  description: >-
+                    Mime type of the file you are about to upload: `audio/ogg`,
+                    `audio/mpeg`, `audio/mp4` (`audio/x-m4a`), `audio/webm`,
+                    `audio/wav` (`audio/x-wav`), `audio/x-flac`, `audio/x-aiff`,
+                    `audio/x-ms-wma`. Parameters are ignored —
+                    `audio/webm;codecs=opus` is `audio/webm`. Whatever you send,
+                    the stored voice is normalised to `ogg/opus`.
+                  example: audio/mpeg
+                name:
+                  type: string
+                  maxLength: 255
+                  description: >-
+                    Attachment name. The extension always follows the processed
+                    file; defaults to `voice_<timestamp>`.
+                size:
+                  type: integer
+                  minimum: 1
+                  description: >-
+                    Size in bytes, when known — fails early if over the limit.
+                    The binding check runs after the upload.
+                chat_id:
+                  type: string
+                  maxLength: 255
+                  description: >-
+                    External chat id. Pass it when the chat has its own S3
+                    credentials (PUT /chats/{chat_id}/s3-credentials) — the file
+                    then goes to that chat's bucket. Otherwise the tenant's
+                    bucket is used, and sending such a file into a chat that
+                    keeps its files elsewhere is rejected (422).
+      responses:
+        '200':
+          description: Upload URL issued.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                  resource_id:
+                    type: string
+                    description: Use it for verify, for the status poll and nowhere else.
+                  upload_url:
+                    type: string
+                    format: uri
+                  method:
+                    type: string
+                    example: PUT
+                  headers:
+                    type: object
+                    additionalProperties:
+                      type: string
+                    description: >-
+                      Send these with the upload request. `x-amz-acl` is signed
+                      into the URL — S3 rejects the upload without it.
+                    example:
+                      x-amz-acl: private
+                      Content-Type: audio/mpeg
+                  max_size:
+                    type: integer
+                    description: Maximum accepted file size, bytes.
+                  max_duration:
+                    type: integer
+                    description: >-
+                      Maximum accepted duration in seconds. Present only for
+                      types that have one — an image never carries it. Checked
+                      after the upload, so a longer file fails the resource
+                      (`status: failed`) rather than the request.
+                  url_expires_at:
+                    type: string
+                    description: When the presigned URL stops working.
+                    example: '2026-09-16T12:00:00.000Z'
+                  expires_at:
+                    type: string
+                    description: >-
+                      Until when the resource is accepted for verification.
+                    example: '2026-09-17T11:00:00.000Z'
+        '404':
+          description: '`chat_id` belongs to no chat.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusError'
+        '422':
+          description: >-
+            Unsupported type or mime, declared size over the limit, or no S3
+            credentials configured for the tenant or the chat.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusError'
+
+  /resources/{resource_id}/verify:
+    parameters:
+      - name: resource_id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      summary: Verify an uploaded file
+      operationId: resource.verify
+      description: >-
+        Step 3 of 4 — tells the service the upload is finished. The file is
+        checked for being present, within the size limit and matching the
+        declared format; everything heavier (decoding, normalising to
+        `ogg/opus`, duration and waveform) runs asynchronously.
+
+
+        A failed resource is **not** re-verified: start over with a new one.
+
+
+        Unless the resource is already `ready` or `failed`, the response carries
+        `Retry-After` — wait that long before the first poll.
+      tags:
+        - Resources
+      responses:
+        '202':
+          description: Accepted — verification started.
+          headers:
+            Retry-After:
+              description: Seconds to wait before the first poll.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceStatus'
+        '200':
+          description: >-
+            Already being processed, or already finished — nothing was started
+            a second time. Safe to call again if you lost the response.
+          headers:
+            Retry-After:
+              description: Seconds to wait before polling again; absent once the status is terminal.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceStatus'
+        '404':
+          description: No such resource.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusError'
+        '422':
+          description: >-
+            The file is not uploaded yet, is empty, is over the limit, does not
+            match the declared format, or the resource has expired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusError'
+
+  /resources/{resource_id}:
+    parameters:
+      - name: resource_id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      summary: Resource status
+      operationId: resource.show
+      description: >-
+        Poll until `status` is `ready` (then `attachment_id` is filled) or
+        `failed` (then `error` says why). While the resource is still being
+        worked on, the response carries `Retry-After`.
+      tags:
+        - Resources
+      responses:
+        '200':
+          description: Current status.
+          headers:
+            Retry-After:
+              description: Seconds to wait before polling again; absent once the status is terminal.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceStatus'
+        '404':
+          description: No such resource.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusError'
 
   /users:
     post:
@@ -2217,6 +2467,11 @@ components:
           maxItems: 20
           items:
             $ref: '#/components/schemas/Button'
+        attachments:
+          type: array
+          description: Present only when the message carries files.
+          items:
+            $ref: '#/components/schemas/Attachment'
 
     PaginationMeta:
       type: object
@@ -2259,6 +2514,123 @@ components:
           nullable: true
           description: Null on the first page.
 
+    AttachmentVariant:
+      type: object
+      description: One shape of a file. Private shapes carry no `url`.
+      properties:
+        url:
+          type: string
+          format: uri
+          description: >-
+            Absent for shapes that stay private — `original` is kept for
+            reprocessing and is never published.
+        mime:
+          type: string
+        size:
+          type: integer
+          description: Bytes.
+        width:
+          type: integer
+        height:
+          type: integer
+
+    Attachment:
+      type: object
+      description: >-
+        A file attached to a message. The flat fields describe what to show or
+        play by default; `variants` lists the other shapes of the same file.
+      required:
+        - id
+        - name
+        - mime
+        - size
+        - url
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        mime:
+          type: string
+          description: >-
+            Mime of the default representation. A voice that went through the
+            pipeline is always `audio/ogg`, whatever was uploaded.
+        size:
+          type: integer
+          description: Size of the default representation, bytes.
+        url:
+          type: string
+          format: uri
+        width:
+          type: integer
+          nullable: true
+        height:
+          type: integer
+          nullable: true
+        duration:
+          type: integer
+          nullable: true
+          description: Seconds; audio and video only.
+        is_image:
+          type: boolean
+          nullable: true
+        is_video:
+          type: boolean
+          nullable: true
+        is_audio:
+          type: boolean
+          nullable: true
+        is_document:
+          type: boolean
+          nullable: true
+        is_voice:
+          type: boolean
+          nullable: true
+        waveform:
+          type: array
+          nullable: true
+          maxItems: 100
+          description: >-
+            Loudness envelope of a voice recording, values 0–31 (64 of them for
+            anything the pipeline produced).
+          items:
+            type: integer
+            minimum: 0
+            maximum: 31
+        resizes:
+          type: object
+          description: >-
+            LEGACY — image resizes as width => url. Mirrors `variants.sizes`,
+            which carries the same files with their dimensions and types.
+          additionalProperties:
+            type: string
+            format: uri
+        variants:
+          type: object
+          description: >-
+            The same file in its other shapes. Present for anything the resource
+            pipeline processed.
+          properties:
+            original:
+              allOf:
+                - $ref: '#/components/schemas/AttachmentVariant'
+              description: As uploaded. Kept private, so it has no `url`.
+            playable:
+              allOf:
+                - $ref: '#/components/schemas/AttachmentVariant'
+              description: >-
+                Normalised for playback everywhere — `ogg/opus` for a voice.
+                This is what the flat `url` points at.
+            preview:
+              allOf:
+                - $ref: '#/components/schemas/AttachmentVariant'
+              description: A still image representing the file.
+            sizes:
+              type: object
+              description: Image resizes keyed by width.
+              additionalProperties:
+                $ref: '#/components/schemas/AttachmentVariant'
+
     StatusError:
       type: object
       description: >-
@@ -2269,6 +2641,38 @@ components:
           example: false
         message:
           type: string
+
+    ResourceStatus:
+      type: object
+      properties:
+        status:
+          type: boolean
+        resource:
+          type: object
+          properties:
+            id:
+              type: string
+            type:
+              type: string
+              enum: [voice]
+            status:
+              type: string
+              enum: [pending, verifying, processing, ready, failed]
+              description: >-
+                `pending` — waiting for the upload; `verifying` — checking the
+                file; `processing` — normalising it; `ready` — done,
+                `attachment_id` is filled; `failed` — see `error`, start over
+                with a new resource.
+            attachment_id:
+              type: string
+              nullable: true
+              description: Send this to POST /chats/{chat_id}/messages.
+            error:
+              type: string
+              nullable: true
+            expires_at:
+              type: string
+              nullable: true
 
     ValidationError:
       type: object

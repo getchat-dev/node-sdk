@@ -1,0 +1,17 @@
+{
+  "status": 200,
+  "body": {
+    "status": true,
+    "resource_id": "res-abc123",
+    "upload_url": "https://s3.example.com/tenant-1/resources/res-abc123?X-Amz-Signature=deadbeef",
+    "method": "PUT",
+    "headers": {
+      "x-amz-acl": "private",
+      "Content-Type": "audio/mpeg"
+    },
+    "max_size": 20971520,
+    "max_duration": 600,
+    "url_expires_at": "2026-09-16T12:00:00.000Z",
+    "expires_at": "2026-09-17T11:00:00.000Z"
+  }
+}
